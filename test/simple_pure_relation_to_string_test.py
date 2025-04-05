@@ -16,4 +16,12 @@ class TestPureRelationDialect(unittest.TestCase):
          .select(SelectionClause([ReferenceExpression("column", "col")]))
          .bind(runtime))
         pure_relation = data_frame.executable_to_string()
-        self.assertEqual(pure_relation, "#>{local::DuckDuckDatabase.table}#->select(~[col])")
+        self.assertEqual("#>{local::DuckDuckDatabase.table}#->select(~[col])", pure_relation)
+
+    def test_multiple_select_clause(self):
+        runtime = NonExecutablePureRuntime("local::DuckDuckDatabase", "table")
+        data_frame = (LegendQL.create()
+         .select(SelectionClause([ReferenceExpression("colA", "colA"), ReferenceExpression("colB", "colB")]))
+         .bind(runtime))
+        pure_relation = data_frame.executable_to_string()
+        self.assertEqual("#>{local::DuckDuckDatabase.table}#->select(~[colA, colB])", pure_relation)

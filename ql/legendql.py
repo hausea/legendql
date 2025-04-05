@@ -1,4 +1,4 @@
-from model.metamodel import Query, SelectionClause, Runtime, DataFrame
+from model.metamodel import Query, SelectionClause, Runtime, DataFrame, FilterClause
 
 
 class LegendQL:
@@ -15,5 +15,9 @@ class LegendQL:
         return self.bind(runtime).eval()
 
     def select(self, select: SelectionClause):
-        self.query.select = select
+        self.query.clauses.append(select)
+        return self
+
+    def filter(self, filter: FilterClause):
+        self.query.clauses.append(filter)
         return self

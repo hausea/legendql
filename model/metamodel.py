@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 class Literal(ABC):
     @abstractmethod
@@ -52,20 +52,26 @@ class Function(ABC):
     pass
 
 class Expression(ABC):
-    pass
+    @abstractmethod
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        pass
 
 class Operator(ABC):
     pass
 
 class UnaryOperator(Operator):
-    pass
+    @abstractmethod
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        pass
 
 class NotUnaryOperator(UnaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_not_unary_operator(self, parameter)
 
 class BinaryOperator(Operator):
-    pass
+    @abstractmethod
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        pass
 
 class EqualsBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
@@ -147,7 +153,9 @@ class FunctionExpression(Expression):
         return visitor.visit_function_expression(self, parameter)
 
 class Clause(ABC):
-    pass
+    @abstractmethod
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        pass
 
 @dataclass
 class FilterClause(Clause):
@@ -198,11 +206,7 @@ class Executable(ABC):
 
 @dataclass
 class Query(Executable):
-    select: SelectionClause = None
-    extend: List[ExtendClause] = None
-    filter: FilterClause = None
-    groupBy: GroupByClause = None
-    limit: LimitClause = None
+    clauses: List[Clause] = field(default_factory=list)
 
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_query(self, parameter)
