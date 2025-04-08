@@ -5,7 +5,7 @@ from typing import Callable, Type, Dict, List
 
 from dsl import parser
 from model.metamodel import FromClause, OrderByClause, LimitClause, IntegerLiteral, OffsetClause, RenameClause, \
-    LeftJoinType, InnerJoinType
+    LeftJoinType, InnerJoinType, JoinExpression
 from dsl.parser import ParseType
 from model.metamodel import SelectionClause, ExtendClause, FilterClause, GroupByClause, JoinClause, JoinType, Expression, Clause
 from dsl.schema import Schema
@@ -48,8 +48,7 @@ class LegendQL:
 
     def group_by(self, aggr: Callable) -> LegendQL:
         self.schema.columns.clear()
-        clause = GroupByClause(parser.Parser.parse(aggr, self.schema, ParseType.group_by))
-        self._clauses.append(clause)
+        self._clauses.append(GroupByClause(parser.Parser.parse(aggr, self.schema, ParseType.group_by)))
         self.schema.update_name()
         return self
 
@@ -58,13 +57,13 @@ class LegendQL:
         expr = parser.Parser.parse_join(join, self.schema, lq.schema)
 
         if isinstance(expr, Expression):
-            clause = JoinClause(from_clause=lq.schema, join_type=join_type, on_clause=expr)
+            clause = JoinClause(from_clause=FromClause(lq.schema.name, lq.schema.name), join_type=join_type, on_clause=JoinExpression(expr))
             self._clauses.append(clause)
         elif isinstance(expr, List) and len(expr) == 2:
             clause = RenameClause([expr[1]])
             self._clauses.append(clause)
 
-            clause = JoinClause(right=lq.schema, condition=expr[0], type=join_type)
+            clause = JoinClause(from_clause=FromClause(lq.schema.name, lq.schema.name), join_type=join_type, on_clause=JoinExpression(expr[0]))
             self._clauses.append(clause)
         else:
             raise ValueError(f"Badly formed Join: {join} {expr}")

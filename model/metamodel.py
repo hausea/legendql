@@ -2,7 +2,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import date
 from enum import Enum
-from typing import List
+from typing import List, Optional
 from dataclasses import dataclass
 
 class Literal[T](ABC):
@@ -234,6 +234,7 @@ class AliasExpression(Expression, ABC):
 @dataclass
 class SelectionExpression(Expression):
     name: str = None
+    expression: Optional[Expression] = None
 
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_selection_expression(self, parameter)
@@ -339,18 +340,16 @@ class ExtendExpression(Expression):
 
 @dataclass
 class GroupByClause(Clause):
-    selections: List[SelectionExpression]
-    expressions: List[GroupByExpression]
-    having: Expression = None
+    expression: Expression
 
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_group_by_clause(self, parameter)
 
 @dataclass
 class GroupByExpression(Expression):
-    alias: str
-    selection: Expression
-    reduction: Expression
+    selections: List[Expression]
+    expressions: List[Expression]
+    having: Expression = None
 
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_group_by_expression(self, parameter)

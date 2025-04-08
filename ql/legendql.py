@@ -33,8 +33,8 @@ class LegendQL:
         self._clauses.append(FilterClause(filter_clause))
         return self
 
-    def group_by(self, selections: List[str], group_by: List[GroupByExpression], having: Expression = None) -> LegendQL:
-        self._clauses.append(GroupByClause(list(map(lambda name: SelectionExpression(name), selections)), group_by, having))
+    def group_by(self, selections: List[Expression], group_by: List[Expression], having: Expression = None) -> LegendQL:
+        self._clauses.append(GroupByClause(GroupByExpression(selections, group_by, having)))
         return self
 
     def limit(self, limit: int) -> LegendQL:

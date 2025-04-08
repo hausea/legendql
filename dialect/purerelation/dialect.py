@@ -8,9 +8,9 @@ from model.metamodel import ExecutionVisitor, JoinClause, LimitClause, DistinctC
     OrBinaryOperator, AndBinaryOperator, LessThanEqualsBinaryOperator, LessThanBinaryOperator, \
     GreaterThanEqualsBinaryOperator, GreaterThanBinaryOperator, NotEqualsBinaryOperator, EqualsBinaryOperator, \
     NotUnaryOperator, InnerJoinType, LeftJoinType, ReferenceExpression, AliasExpression, ExtendExpression, \
-    GroupByExpression, CountFunction, JoinExpression, Expression, Clause, FromClause, AddBinaryOperator, \
+    CountFunction, JoinExpression, Expression, Clause, FromClause, AddBinaryOperator, \
     MultiplyBinaryOperator, SubtractBinaryOperator, DivideBinaryOperator, OrderByClause, OffsetClause, RenameClause, \
-    SortExpression, NotExpression, IfExpression, ColumnReference, ColumnExpression, DateLiteral
+    SortExpression, NotExpression, IfExpression, ColumnReference, DateLiteral, GroupByExpression, ColumnExpression
 
 
 @dataclass
@@ -321,16 +321,13 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
 
     def visit_group_by_clause(self, val: GroupByClause, parameter: str) -> str:
         #->groupBy(~[departmentId], ~[count: x | $x.departmentId : d | $d->count(), count2: x | $x.departmentId : d | $d->count()])
+        return "groupBy(" + val.expression.visit(self, "") + ")"
 
+    def visit_group_by_expression(self, val: GroupByExpression, parameter: str) -> str:
         selections = "~[" + ", ".join(map(lambda selection: selection.visit(self, ""), val.selections)) + "]"
         expressions = "~[" + ", ".join(map(lambda expression: expression.visit(self, ""), val.expressions)) + "]"
         having = ", " + val.having.visit(self, "") if val.having else ""
-        return "groupBy(" + selections + ", " + expressions + having + ")"
-
-    def visit_group_by_expression(self, val: GroupByExpression, parameter: str) -> str:
-        selection_vars = self.extract_variables(val.selection)
-        reduction_vars = self.extract_variables(val.reduction)
-        return val.alias + ": " + ", ".join(selection_vars) + " | " + val.selection.visit(self, "") + " : " + ", ".join(reduction_vars) + " | " + val.reduction.visit(self, "")
+        return selections + ", " + expressions + having
 
     def visit_distinct_clause(self, val: DistinctClause, parameter: str) -> str:
         return "distinct(~[" + ", ".join(map(lambda expr: expr.visit(self, ""), val.expressions)) + "])"

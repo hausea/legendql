@@ -19,7 +19,8 @@ from model.metamodel import Expression, ColumnExpression, BinaryExpression, Bina
     NotEqualsBinaryOperator, LessThanBinaryOperator, LessThanEqualsBinaryOperator, GreaterThanBinaryOperator, \
     GreaterThanEqualsBinaryOperator, InBinaryOperator, NotInBinaryOperator, IsBinaryOperator, IsNotBinaryOperator, \
     AddBinaryOperator, SubtractBinaryOperator, MultiplyBinaryOperator, DivideBinaryOperator, ModuloBinaryOperator, \
-    ExponentBinaryOperator, BitwiseOrBinaryOperator, BitwiseAndBinaryOperator, DateLiteral, LiteralExpression
+    ExponentBinaryOperator, BitwiseOrBinaryOperator, BitwiseAndBinaryOperator, DateLiteral, LiteralExpression, \
+    GroupByClause, GroupByExpression
 from dsl.schema import Schema
 
 class ParseType(Enum):
@@ -370,9 +371,15 @@ class Parser:
 
             # very brittle, lots more checks needed here
             module = importlib.import_module("functions")
-            print(node.func.id)
             class_ = getattr(module, f"{node.func.id.title()}Function")
             instance = class_()
+
+            if node.func.id == "aggregate":
+                selections = args_list[0]
+                expressions = args_list[1]
+                having = args_list[2] if len(args_list) == 3 else None
+                return GroupByExpression(selections=selections, expressions=expressions, having=having)
+
             return FunctionExpression(instance, parameters=args_list)
 
         elif isinstance(node, ast.JoinedStr):
