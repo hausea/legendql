@@ -9,7 +9,8 @@ from model.metamodel import ExecutionVisitor, JoinClause, LimitClause, DistinctC
     GreaterThanEqualsBinaryOperator, GreaterThanBinaryOperator, NotEqualsBinaryOperator, EqualsBinaryOperator, \
     NotUnaryOperator, InnerJoinType, LeftJoinType, ReferenceExpression, AliasExpression, ExtendExpression, \
     GroupByExpression, CountFunction, JoinExpression, Expression, Clause, FromClause, AddBinaryOperator, \
-    MultiplyBinaryOperator, SubtractBinaryOperator, DivideBinaryOperator
+    MultiplyBinaryOperator, SubtractBinaryOperator, DivideBinaryOperator, OrderByClause, OffsetClause, RenameClause, \
+    SortExpression, NotExpression, IfExpression, ColumnReference, ColumnExpression, DateLiteral
 
 
 @dataclass
@@ -161,6 +162,57 @@ class ReferenceNameExtractorExpressionVisitor(ExecutionVisitor):
     def visit_left_join_type(self, val: LeftJoinType, parameter: Set[str]) -> Set[str]:
         return parameter
 
+    def visit_date_literal(self, val: DateLiteral, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_column_expression(self, val: ColumnExpression, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_column_reference(self, val: ColumnReference, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_if_expression(self, val: IfExpression, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_not_expression(self, val: NotExpression, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_sort_expression(self, val: SortExpression, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_rename_clause(self, val: RenameClause, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_offset_clause(self, val: OffsetClause, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_order_by_clause(self, val: OrderByClause, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_in_binary_operator(self, self1, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_not_in_binary_operator(self, self1, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_is_binary_operator(self, self1, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_is_not_binary_operator(self, self1, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_modulo_binary_operator(self, self1, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_exponent_binary_operator(self, self1, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_bitwise_and_binary_operator(self, self1, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
+    def visit_bitwise_or_binary_operator(self, self1, parameter: Set[str]) -> Set[str]:
+        raise NotImplementedError()
+
 @dataclass
 class PureRelationExpressionVisitor(ExecutionVisitor):
     runtime: PureRuntime
@@ -298,3 +350,54 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
 
     def visit_left_join_type(self, val: LeftJoinType, parameter: str) -> str:
         return "JoinKind.LEFT"
+
+    def visit_date_literal(self, val: DateLiteral, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_column_expression(self, val: ColumnExpression, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_column_reference(self, val: ColumnReference, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_if_expression(self, val: IfExpression, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_not_expression(self, val: NotExpression, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_sort_expression(self, val: SortExpression, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_rename_clause(self, val: RenameClause, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_offset_clause(self, val: OffsetClause, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_order_by_clause(self, val: OrderByClause, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_in_binary_operator(self, self1, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_not_in_binary_operator(self, self1, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_is_binary_operator(self, self1, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_is_not_binary_operator(self, self1, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_modulo_binary_operator(self, self1, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_exponent_binary_operator(self, self1, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_bitwise_and_binary_operator(self, self1, parameter: str) -> str:
+        raise NotImplementedError()
+
+    def visit_bitwise_or_binary_operator(self, self1, parameter: str) -> str:
+        raise NotImplementedError()

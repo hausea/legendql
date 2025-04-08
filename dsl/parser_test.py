@@ -1,10 +1,11 @@
 import unittest
 
+from dsl.dsl_functions import aggregate, count, over, avg, rows, unbounded
 from functions import StringConcatFunction, AggregateFunction, SumFunction, CountFunction, OverFunction, AvgFunction, \
     UnboundedFunction, RowsFunction
 from legendql import LegendQL
 from parser import Parser, ParseType
-from metamodel import *
+from model.metamodel import *
 
 
 class ParserTest(unittest.TestCase):
@@ -17,43 +18,53 @@ class ParserTest(unittest.TestCase):
         p = Parser.parse_join(join, lq.schema, jq.schema)
 
         self.assertEqual(p, BinaryExpression(
-            left=ColumnReference(name='dept_id', table='employee'),
-            right=ColumnReference(name='id', table='department'),
-            operator=BinaryOperator(value='=')))
+            left=OperandExpression(ColumnReference(name='dept_id', table='employee')),
+            right=OperandExpression(ColumnReference(name='id', table='department')),
+            operator=EqualsBinaryOperator()))
 
 
     def test_filter(self):
         lq = LegendQL.from_("employee", {"start_date": str})
-        filter = lambda e: e.start_date > '2021-01-01'
+        filter = lambda e: e.start_date > date(2021, 1, 1)
         p = Parser.parse(filter, lq.schema, ParseType.filter)
 
         self.assertEqual(p, BinaryExpression(
-            left=ColumnReference(name='start_date', table='employee'),
-            right=LiteralExpression(value='2021-01-01'),
-            operator=BinaryOperator(value='>')))  # add assertion here
+            left=OperandExpression(ColumnReference(name='start_date', table='employee')),
+            right=OperandExpression(LiteralExpression(DateLiteral(date(2021, 1, 1)))),
+            operator=GreaterThanBinaryOperator()))  # add assertion here
 
 
     def test_nested_filter(self):
         lq = LegendQL.from_("employee", {"start_date": str, "salary": str})
-        filter = lambda e: (e.start_date > '2021-01-01') or (e.start_date < '2000-02-02') and (e.salary < 1_000_000)
+        filter = lambda e: (e.start_date > date(2021, 1, 1)) or (e.start_date < date(2000, 2, 2)) and (e.salary < 1_000_000)
         p = Parser.parse(filter, lq.schema, ParseType.filter)
 
         self.assertEqual(p, BinaryExpression(
-            left=BinaryExpression(
-                left=ColumnReference(name='start_date', table='employee'),
-                right=LiteralExpression(value='2021-01-01'),
-                operator=BinaryOperator(value='>')),
-            right=BinaryExpression(
-                left=BinaryExpression(
-                    left=ColumnReference(name='start_date', table='employee'),
-                    right=LiteralExpression(value='2000-02-02'),
-                    operator=BinaryOperator(value='<')),
-                right=BinaryExpression(
-                    left=ColumnReference(name='salary', table='employee'),
-                    right=LiteralExpression(value=1000000),
-                    operator=BinaryOperator(value='<')),
-                operator=BinaryOperator(value='AND')),
-            operator=BinaryOperator(value='OR')))
+            left=OperandExpression(
+                BinaryExpression(
+                    left=OperandExpression(
+                        ColumnReference(name='start_date', table='employee')),
+                    right=OperandExpression(
+                        LiteralExpression(DateLiteral(date(2021, 1, 1)))),
+                    operator=GreaterThanBinaryOperator())),
+            right=OperandExpression(
+                BinaryExpression(
+                    left=OperandExpression(
+                        BinaryExpression(
+                            left=OperandExpression(
+                                ColumnReference(name='start_date', table='employee')),
+                            right=OperandExpression(
+                                LiteralExpression(DateLiteral(date(2000, 2, 2)))),
+                            operator=LessThanBinaryOperator())),
+                    right=OperandExpression(
+                        BinaryExpression(
+                            left=OperandExpression(
+                                ColumnReference(name='salary', table='employee')),
+                            right=OperandExpression(
+                                LiteralExpression(IntegerLiteral(1000000))),
+                            operator=LessThanBinaryOperator())),
+                    operator=AndBinaryOperator())),
+            operator=OrBinaryOperator()))
 
 
     def test_extend(self):
@@ -68,15 +79,15 @@ class ParserTest(unittest.TestCase):
             ColumnExpression(
                 name='gross_salary',
                 expression=BinaryExpression(
-                    left=ColumnReference(name='salary', table='employee'),
-                    right=LiteralExpression(value=10),
-                    operator=BinaryOperator(value='+'))),
+                    left=OperandExpression(ColumnReference(name='salary', table='employee')),
+                    right=OperandExpression(LiteralExpression(IntegerLiteral(10))),
+                    operator=AddBinaryOperator())),
             ColumnExpression(
                 name='gross_cost',
                 expression=BinaryExpression(
-                    left=ColumnReference(name='gross_salary', table=''),
-                    right=ColumnReference(name='benefits', table='employee'),
-                    operator=BinaryOperator(value='+')))
+                    left=OperandExpression(ColumnReference(name='gross_salary', table='')),
+                    right=OperandExpression(ColumnReference(name='benefits', table='employee')),
+                    operator=AddBinaryOperator()))
         ])
 
 
@@ -102,7 +113,7 @@ class ParserTest(unittest.TestCase):
                 function=StringConcatFunction(),
                 parameters=[
                     ColumnReference(name='title', table='employee'),
-                    LiteralExpression(value='_'),
+                    LiteralExpression(StringLiteral("_")),
                     ColumnReference(name='country', table='employee')])))
 
 
@@ -126,24 +137,24 @@ class ParserTest(unittest.TestCase):
                     expression=FunctionExpression(
                         function=SumFunction(),
                         parameters=[BinaryExpression(
-                            left=ColumnReference(name='salary', table='employee'),
-                            right=LiteralExpression(value=1),
-                            operator=BinaryOperator(value='+'))])),
+                            left=OperandExpression(ColumnReference(name='salary', table='employee')),
+                            right=OperandExpression(LiteralExpression(IntegerLiteral(1))),
+                            operator=AddBinaryOperator())])),
                  ColumnExpression(
                     name='count_dept',
                     expression=FunctionExpression(
                         function=CountFunction(),
                         parameters=[ColumnReference(name='department_name', table='employee')]))],
                 BinaryExpression(
-                    left=ColumnReference(name='sum_salary', table=''),
-                    right=LiteralExpression(value=100000),
-                    operator=BinaryOperator(value='>'))])
+                    left=OperandExpression(ColumnReference(name='sum_salary', table='')),
+                    right=OperandExpression(LiteralExpression(IntegerLiteral(100000))),
+                    operator=GreaterThanBinaryOperator())])
         print(f)
 
         self.assertEqual(str(p), str(f))
 
     def test_window(self):
-        lq = LegendQL.from_("employee", {"location": str, "salary": float, "emp_name": str, "location": str})
+        lq = LegendQL.from_("employee", {"location": str, "salary": float, "emp_name": str})
         window = lambda r: (avg_val :=
                             over(r.location, avg(r.salary), sort=[r.emp_name, -r.location], frame=rows(0, unbounded())))
 
@@ -165,7 +176,7 @@ class ParserTest(unittest.TestCase):
                          expression=ColumnReference(name='location', table='employee'))],
                     FunctionExpression(
                         function=RowsFunction(),
-                        parameters=[LiteralExpression(value=0),
+                        parameters=[LiteralExpression(IntegerLiteral(0)),
                                     FunctionExpression(function=UnboundedFunction(), parameters=[])])]))
 
         self.assertEqual(p, f)

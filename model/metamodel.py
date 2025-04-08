@@ -1,6 +1,8 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import List, Any
+from datetime import date
+from enum import Enum
+from typing import List
 from dataclasses import dataclass
 
 class Literal[T](ABC):
@@ -37,6 +39,18 @@ class StringLiteral(Literal):
         return visitor.visit_string_literal(self, parameter)
 
 @dataclass
+class DateLiteral(Literal):
+    val: date
+    def __init__(self, val):
+        self.val = val
+
+    def value(self) -> date:
+        return self.val
+
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_date_literal(self, parameter)
+
+@dataclass
 class BooleanLiteral(Literal):
     val: bool
     def __init__(self, val):
@@ -53,6 +67,7 @@ class Function(ABC):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         pass
 
+@dataclass
 class CountFunction(Function):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_count_function(self, parameter)
@@ -70,6 +85,7 @@ class Operator(ABC):
 class UnaryOperator(Operator, ABC):
     pass
 
+@dataclass
 class NotUnaryOperator(UnaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_not_unary_operator(self, parameter)
@@ -77,53 +93,105 @@ class NotUnaryOperator(UnaryOperator):
 class BinaryOperator(Operator, ABC):
     pass
 
+@dataclass
 class EqualsBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_equals_binary_operator(self, parameter)
 
+@dataclass
 class NotEqualsBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_not_equals_binary_operator(self, parameter)
 
+@dataclass
 class GreaterThanBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_greater_than_binary_operator(self, parameter)
 
+@dataclass
 class GreaterThanEqualsBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_greater_than_equals_operator(self, parameter)
 
+@dataclass
 class LessThanBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_less_than_binary_operator(self, parameter)
 
+@dataclass
 class LessThanEqualsBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_less_than_equals_binary_operator(self, parameter)
 
+@dataclass
+class InBinaryOperator(BinaryOperator):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_in_binary_operator(self, parameter)
+
+@dataclass
+class NotInBinaryOperator(BinaryOperator):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_not_in_binary_operator(self, parameter)
+
+@dataclass
+class IsBinaryOperator(BinaryOperator):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_is_binary_operator(self, parameter)
+
+@dataclass
+class IsNotBinaryOperator(BinaryOperator):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_is_not_binary_operator(self, parameter)
+
+@dataclass
 class AndBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_and_binary_operator(self, parameter)
 
+@dataclass
 class OrBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_or_binary_operator(self, parameter)
 
+@dataclass
 class AddBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_add_binary_operator(self, parameter)
 
+@dataclass
 class MultiplyBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_multiply_binary_operator(self, parameter)
 
+@dataclass
 class SubtractBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_subtract_binary_operator(self, parameter)
 
+@dataclass
 class DivideBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_divide_binary_operator(self, parameter)
+
+@dataclass
+class ModuloBinaryOperator(BinaryOperator):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_modulo_binary_operator(self, parameter)
+
+@dataclass
+class ExponentBinaryOperator(BinaryOperator):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_exponent_binary_operator(self, parameter)
+
+@dataclass
+class BitwiseAndBinaryOperator(BinaryOperator):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_bitwise_and_binary_operator(self, parameter)
+
+@dataclass
+class BitwiseOrBinaryOperator(BinaryOperator):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_bitwise_or_binary_operator(self, parameter)
 
 @dataclass
 class OperandExpression(Expression):
@@ -171,6 +239,50 @@ class SelectionExpression(Expression):
         return visitor.visit_selection_expression(self, parameter)
 
 @dataclass
+class ColumnExpression(Expression):
+    name: str
+    expression: Expression
+
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_column_expression(self, parameter)
+
+@dataclass
+class ColumnReference(Expression):
+    name: str
+    table: str
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_column_reference(self, parameter)
+
+@dataclass
+class IfExpression(Expression):
+    test: Expression
+    body: Expression
+    orelse: Expression
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_if_expression(self, parameter)
+
+@dataclass
+class NotExpression(Expression):
+    expression: Expression
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_not_expression(self, parameter)
+
+class Sort(Enum):
+    ASC = "ASC"
+    DESC = "DESC"
+
+    def __str__(self):
+        return self.value
+
+@dataclass
+class SortExpression(Expression):
+    direction: Sort
+    expression: Expression
+
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_sort_expression(self, parameter)
+
+@dataclass
 class ReferenceExpression(AliasExpression):
     ref: str = None
 
@@ -189,6 +301,14 @@ class Clause(ABC):
     pass
 
 @dataclass
+class RenameClause(Clause):
+    expressions: List[Expression]
+
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_rename_clause(self, parameter)
+
+
+@dataclass
 class FilterClause(Clause):
     expression: Expression
 
@@ -197,14 +317,14 @@ class FilterClause(Clause):
 
 @dataclass
 class SelectionClause(Clause):
-    expressions: List[SelectionExpression]
+    expressions: List[Expression]
 
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_selection_clause(self, parameter)
 
 @dataclass
 class ExtendClause(Clause):
-    expressions: List[ExtendExpression]
+    expressions: List[Expression]
 
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_extend_clause(self, parameter)
@@ -261,10 +381,12 @@ class JoinType(ABC):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         pass
 
+@dataclass
 class InnerJoinType(JoinType):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_inner_join_type(self, parameter)
 
+@dataclass
 class LeftJoinType(JoinType):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_left_join_type(self, parameter)
@@ -285,28 +407,19 @@ class JoinClause(Clause):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_join_clause(self, parameter)
 
-class Column(ABC):
-    pass
+@dataclass
+class OffsetClause(Clause):
+    value: IntegerLiteral
+
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_offset_clause(self, parameter)
 
 @dataclass
-class HeaderColumn(Column):
-    header: str
-    pass
+class OrderByClause(Clause):
+    expressions: List[Expression]
 
-@dataclass
-class ValueColumn(Column):
-    value: Any
-    pass
-
-@dataclass
-class Row:
-    columns: List[Column]
-    pass
-
-@dataclass
-class Results:
-    header: Row = None
-    rows: List[Row] = None
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_order_by_clause(self, parameter)
 
 class Runtime(ABC):
     @abstractmethod
@@ -346,6 +459,10 @@ class ExecutionVisitor(ABC):
 
     @abstractmethod
     def visit_string_literal[P, T](self, val: StringLiteral, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_date_literal[P, T](self, val: DateLiteral, parameter: P) -> T:
         raise NotImplementedError()
 
     @abstractmethod
@@ -486,4 +603,68 @@ class ExecutionVisitor(ABC):
 
     @abstractmethod
     def visit_left_join_type[P, T](self, val: LeftJoinType, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_column_expression[P, T](self, val: ColumnExpression, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_column_reference[P, T](self, val: ColumnReference, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_if_expression[P, T](self, val: IfExpression, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_not_expression[P, T](self, val: NotExpression, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_sort_expression[P, T](self, val: SortExpression, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_rename_clause[P, T](self, val: RenameClause, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_offset_clause[P, T](self, val: OffsetClause, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_order_by_clause[P, T](self, val: OrderByClause, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_in_binary_operator[P, T](self, self1, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_not_in_binary_operator[P, T](self, self1, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_is_binary_operator[P, T](self, self1, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_is_not_binary_operator[P, T](self, self1, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_modulo_binary_operator[P, T](self, self1, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_exponent_binary_operator[P, T](self, self1, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_bitwise_and_binary_operator[P, T](self, self1, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_bitwise_or_binary_operator[P, T](self, self1, parameter: P) -> T:
         raise NotImplementedError()

@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from typing import Callable, Type, Dict, List
 
 from dsl import parser
-from dsl.dsl_functions import *
-from dsl.metamodel import FromClause, WithClause, OrderByClause, LimitClause, IntegerLiteral, OffsetClause, RenameClause
+from model.metamodel import FromClause, OrderByClause, LimitClause, IntegerLiteral, OffsetClause, RenameClause, \
+    LeftJoinType, InnerJoinType
 from dsl.parser import ParseType
-from metamodel import SelectClause, ExtendClause, FilterClause, GroupByClause, JoinClause, JoinType, Expression, Clause
+from model.metamodel import SelectionClause, ExtendClause, FilterClause, GroupByClause, JoinClause, JoinType, Expression, Clause
 from dsl.schema import Schema
 
 
@@ -23,7 +23,7 @@ class LegendQL:
 
     def select(self, columns: Callable) -> LegendQL:
         self.schema.columns.clear()
-        clause = SelectClause(parser.Parser.parse(columns, self.schema, ParseType.select))
+        clause = SelectionClause(parser.Parser.parse(columns, self.schema, ParseType.select))
         self._clauses.append(clause)
         self.schema.update_name()
         return self
@@ -58,7 +58,7 @@ class LegendQL:
         expr = parser.Parser.parse_join(join, self.schema, lq.schema)
 
         if isinstance(expr, Expression):
-            clause = JoinClause(right=lq.schema, condition=expr, type=join_type)
+            clause = JoinClause(from_clause=lq.schema, join_type=join_type, on_clause=expr)
             self._clauses.append(clause)
         elif isinstance(expr, List) and len(expr) == 2:
             clause = RenameClause([expr[1]])
@@ -78,10 +78,10 @@ class LegendQL:
         return self
 
     def join(self, lq: LegendQL, join: Callable) -> LegendQL:
-        return self._join(lq, join, JoinType.INNER)
+        return self._join(lq, join, InnerJoinType())
 
     def left_join(self, lq: LegendQL, join: Callable) -> LegendQL:
-        return self._join(lq, join, JoinType.LEFT)
+        return self._join(lq, join, LeftJoinType())
 
     def order_by(self, columns: Callable) -> LegendQL:
         clause = OrderByClause(parser.Parser.parse(columns, self.schema, ParseType.order_by))

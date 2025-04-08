@@ -3,7 +3,6 @@ from abc import ABC
 from dataclasses import dataclass
 from typing import Union, Optional
 
-from dsl.metamodel import Function
 
 class AggregationFunction:
     pass
@@ -43,7 +42,6 @@ class LagFunction(WindowFunction, int):
         offset: Optional[int] = 1,
         default: Optional[ast.Expr] = None):
         pass
-
 
 @dataclass
 class AggregateFunction:

@@ -1,3 +1,4 @@
+from dsl.dsl_functions import over, avg, rows, aggregate, unbounded, count, left
 from legendql import *
 
 '''

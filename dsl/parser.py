@@ -8,12 +8,18 @@ import ast
 import importlib
 import inspect
 from _ast import operator
+from datetime import date
 from enum import Enum
 from typing import Callable, List, Union, Dict
 
 from functions import StringConcatFunction
-from metamodel import Expression, ColumnExpression, BinaryExpression, BinaryOperator, \
-    ColumnReference, BooleanLiteral, IfExpression, NotExpression, SortExpression, Sort, FunctionExpression
+from model.metamodel import Expression, ColumnExpression, BinaryExpression, BinaryOperator, \
+    ColumnReference, BooleanLiteral, IfExpression, NotExpression, SortExpression, Sort, FunctionExpression, \
+    OperandExpression, AndBinaryOperator, OrBinaryOperator, IntegerLiteral, StringLiteral, EqualsBinaryOperator, \
+    NotEqualsBinaryOperator, LessThanBinaryOperator, LessThanEqualsBinaryOperator, GreaterThanBinaryOperator, \
+    GreaterThanEqualsBinaryOperator, InBinaryOperator, NotInBinaryOperator, IsBinaryOperator, IsNotBinaryOperator, \
+    AddBinaryOperator, SubtractBinaryOperator, MultiplyBinaryOperator, DivideBinaryOperator, ModuloBinaryOperator, \
+    ExponentBinaryOperator, BitwiseOrBinaryOperator, BitwiseAndBinaryOperator, DateLiteral, LiteralExpression
 from dsl.schema import Schema
 
 class ParseType(Enum):
@@ -191,7 +197,7 @@ class Parser:
             if isinstance(right, list) or isinstance(right, tuple):
                 raise ValueError(f"Unsupported Compare object {right}")
 
-            return BinaryExpression(left=left, operator=comp_op, right=right)
+            return BinaryExpression(left=OperandExpression(left), operator=comp_op, right=OperandExpression(right))
 
         elif isinstance(node, ast.BinOp):
             # Handle binary operations (e.g., x + y, x - y, x * y)
@@ -206,14 +212,14 @@ class Parser:
             if isinstance(right, list) or isinstance(right, tuple):
                 raise ValueError(f"Unsupported BinOp object {right}")
 
-            return BinaryExpression(left=left, operator=comp_op, right=right)
+            return BinaryExpression(left=OperandExpression(left), operator=comp_op, right=OperandExpression(right))
 
         elif isinstance(node, ast.BoolOp):
             # Handle boolean operations (e.g., x and y, x or y)
             values = [Parser._parse_expression(val, alias, ptype) for val in node.values]
 
             # Combine the values with the appropriate operator
-            comp_op = BinaryOperator("AND") if isinstance(node.op, ast.And) else BinaryOperator("OR")
+            comp_op = AndBinaryOperator() if isinstance(node.op, ast.And) else OrBinaryOperator()
 
             # Ensure all values are Expression objects, not lists or tuples
             processed_values = []
@@ -224,11 +230,11 @@ class Parser:
                     processed_values.append(val)
 
             # Start with the first two values
-            result = BinaryExpression(left=processed_values[0], operator=comp_op, right=processed_values[1])
+            result = BinaryExpression(left=OperandExpression(processed_values[0]), operator=comp_op, right=OperandExpression(processed_values[1]))
 
             # Add the remaining values
             for value in processed_values[2:]:
-                result = BinaryExpression(left=result, operator=comp_op, right=value)
+                result = BinaryExpression(left=OperandExpression(result), operator=comp_op, right=OperandExpression(value))
 
             return result
 
@@ -250,8 +256,15 @@ class Parser:
 
         elif isinstance(node, ast.Constant):
             # Handle literal values (e.g., 5, 'value', True)
-            from metamodel import LiteralExpression
-            return LiteralExpression(value=node.value)
+            from model.metamodel import LiteralExpression
+            if isinstance(node.value, int):
+                return LiteralExpression(IntegerLiteral(node.value))
+            if isinstance(node.value, bool):
+                return LiteralExpression(BooleanLiteral(node.value))
+            if isinstance(node.value, str):
+                return LiteralExpression(StringLiteral(node.value))
+
+            raise ValueError(f"Cannot convert literal type {type(node.value)}")
 
         elif isinstance(node, ast.Name):
             # Handle variable names (e.g., x, y)
@@ -259,11 +272,11 @@ class Parser:
                 # This is the lambda parameter itself
                 raise ValueError(f"Cannot reference the lambda parameter by itself {node.id}")
             elif node.id == "True":
-                from metamodel import LiteralExpression
-                return LiteralExpression(value=BooleanLiteral(True))
+                from model.metamodel import LiteralExpression
+                return LiteralExpression(BooleanLiteral(True))
             elif node.id == "False":
-                from metamodel import LiteralExpression
-                return LiteralExpression(value=BooleanLiteral(False))
+                from model.metamodel import LiteralExpression
+                return LiteralExpression(BooleanLiteral(False))
             else:
                 # This is a variable reference
                 return ColumnReference(name=node.id, table='')
@@ -346,11 +359,18 @@ class Parser:
             else:
                 ValueError(f"Unsupported function type: {node.func}")
 
+            if node.func.id == "date":
+                from model.metamodel import LiteralExpression
+                compiled = compile(ast.fix_missing_locations(ast.Expression(body=node)), '', 'eval')
+                val = eval(compiled, None, None)
+                return LiteralExpression(literal=DateLiteral(val))
+
             #if node.func.id not in known_functions:
             #    ValueError(f"Unknown function name: {node.func.id}")
 
             # very brittle, lots more checks needed here
             module = importlib.import_module("functions")
+            print(node.func.id)
             class_ = getattr(module, f"{node.func.id.title()}Function")
             instance = class_()
             return FunctionExpression(instance, parameters=args_list)
@@ -406,25 +426,25 @@ class Parser:
             The equivalent SQL operator
         """
         if isinstance(op, ast.Eq):
-            return BinaryOperator("=")
+            return EqualsBinaryOperator()
         elif isinstance(op, ast.NotEq):
-            return BinaryOperator("!=")
+            return NotEqualsBinaryOperator()
         elif isinstance(op, ast.Lt):
-            return BinaryOperator("<")
+            return LessThanBinaryOperator()
         elif isinstance(op, ast.LtE):
-            return BinaryOperator("<=")
+            return LessThanEqualsBinaryOperator()
         elif isinstance(op, ast.Gt):
-            return BinaryOperator(">")
+            return GreaterThanBinaryOperator()
         elif isinstance(op, ast.GtE):
-            return BinaryOperator(">=")
+            return GreaterThanEqualsBinaryOperator()
         elif isinstance(op, ast.In):
-            return BinaryOperator("IN")
+            return InBinaryOperator()
         elif isinstance(op, ast.NotIn):
-            return BinaryOperator("NOT IN")
+            return NotInBinaryOperator()
         elif isinstance(op, ast.Is):
-            return BinaryOperator("IS")
+            return IsBinaryOperator()
         elif isinstance(op, ast.IsNot):
-            return BinaryOperator("IS NOT")
+            return IsNotBinaryOperator()
         else:
             raise ValueError(f"Unsupported comparison operator {op}")
 
@@ -432,20 +452,20 @@ class Parser:
     def _get_binary_operator(op: operator) -> BinaryOperator:
         # Map Python operators to Binary operators
         if isinstance(op, ast.Add):
-            return BinaryOperator("+")
+            return AddBinaryOperator()
         elif isinstance(op, ast.Sub):
-            return BinaryOperator("-")
+            return SubtractBinaryOperator()
         elif isinstance(op, ast.Mult):
-            return BinaryOperator("*")
+            return MultiplyBinaryOperator()
         elif isinstance(op, ast.Div):
-            return BinaryOperator("/")
+            return DivideBinaryOperator()
         elif isinstance(op, ast.Mod):
-            return BinaryOperator("%")
+            return ModuloBinaryOperator()
         elif isinstance(op, ast.Pow):
-            return BinaryOperator("^")
+            return ExponentBinaryOperator()
         elif isinstance(op, ast.BitOr):
-            return BinaryOperator("|")
+            return BitwiseOrBinaryOperator()
         elif isinstance(op, ast.BitAnd):
-            return BinaryOperator("&")
+            return BitwiseAndBinaryOperator()
         else:
             raise ValueError(f"Unsupported binary operator {op}")
