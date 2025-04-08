@@ -8,6 +8,7 @@ import ast
 import importlib
 import inspect
 from _ast import operator
+from enum import Enum
 from typing import Callable, List, Union, Dict
 
 from functions import StringConcatFunction
@@ -15,11 +16,20 @@ from metamodel import Expression, ColumnExpression, BinaryExpression, BinaryOper
     ColumnReference, BooleanLiteral, IfExpression, NotExpression, SortExpression, Sort, FunctionExpression
 from dsl.schema import Schema
 
+class ParseType(Enum):
+    extend = "extend"
+    join = "join"
+    rename = "rename"
+    select = "select"
+    group_by = "group_by"
+    filter = "filter"
+    order_by = "order_by"
+    dummy = "dummy"
 
 class Parser:
 
     @staticmethod
-    def parse(func: Callable, schema: Schema) -> Union[Expression, List[Expression]]:
+    def parse(func: Callable, schema: Schema, ptype: ParseType) -> Union[Expression, List[Expression]]:
         """
         Parse a lambda function and convert it to an Expression or list of Expressions.
 
@@ -30,6 +40,7 @@ class Parser:
                 - A lambda that returns an array of column references (e.g., lambda x: [x.name, x.age])
                 - A lambda that returns tuples with sort direction (e.g., lambda x: [(x.department, Sort.DESC)])
             schema: the current LegendQL query context
+            ptype: The LegendQL function calling this parser (extend, join, select ..)
 
         Returns:
             An Expression or list of Expressions representing the lambda function
@@ -44,7 +55,7 @@ class Parser:
         alias = {lambda_args[0].arg: schema}
 
         # Parse the lambda body
-        result = Parser._parse_expression(lambda_node.body, alias)
+        result = Parser._parse_expression(lambda_node.body, alias, ptype)
 
         # [lambda_body, lambda_args] = _get_lambda_source(func)
         # alias = {lambda_args[0].arg: query.name}
@@ -77,7 +88,7 @@ class Parser:
         alias = {lambda_args[0].arg: schema, lambda_args[1].arg: join}
 
         # Parse the lambda body
-        result = Parser._parse_expression(lambda_node.body, alias)
+        result = Parser._parse_expression(lambda_node.body, alias, ParseType.join)
 
         return result
 
@@ -111,7 +122,7 @@ class Parser:
         return lambda_node
 
     @staticmethod
-    def _parse_expression(node: ast.AST, alias: Dict[str, Schema]) -> Union[Expression, List[Expression]]:
+    def _parse_expression(node: ast.AST, alias: Dict[str, Schema], ptype: ParseType) -> Union[Expression, List[Expression]]:
         """
         Parse an AST node and convert it to an Expression or list of Expressions.
 
@@ -122,6 +133,7 @@ class Parser:
         Returns:
             An Expression or list of Expressions representing the AST node,
             or list containing tuples of (Expression, sort_direction) for order_by clauses
+            :param ptype:
         """
         if node is None:
             raise ValueError("node in Parser._parse_expression is None")
@@ -131,9 +143,31 @@ class Parser:
             if isinstance(node.target, ast.Name):
                 target_name = node.target.id
             else:
-                raise ValueError("Rename column must be valid column name")
+                raise ValueError(f"Rename column must be valid column name: {node.target}")
 
-            expr = Parser._parse_expression(node.value, alias)
+            expr = Parser._parse_expression(node.value, alias, ptype)
+
+            if ptype == ParseType.extend:
+                # we know extend function only has one lambda arg
+                _, schema = next(iter(alias.items()))
+                #  we know that extend always adds a column so add it into schema here
+                schema.columns[target_name] = None
+
+            if ptype == ParseType.group_by:
+                # we know group_by function only has one lambda arg
+                _, schema = next(iter(alias.items()))
+                #  we know that extend always adds a column so add it into schema here
+                schema.columns[target_name] = None
+                ptype = ParseType.dummy
+
+            if ptype == ParseType.join or ptype == ParseType.rename:
+                # only support rename in joins
+                if isinstance(node.value, ast.Attribute) and isinstance(node.value.value, ast.Name):
+                    schema = alias[node.value.value.id]
+                    # add new rename column preserving order
+                    schema.columns = {node.target.id if k == node.value.attr else k : v for k, v in schema.columns.items()}
+                else:
+                    raise ValueError(f"You can only rename columns in rename() and join() no expressions allowed: {node.value}")
 
             if isinstance(expr, Expression):
                 return ColumnExpression(name=target_name, expression=expr)
@@ -142,12 +176,12 @@ class Parser:
 
         if isinstance(node, ast.Compare):
             # Handle comparison operations (e.g., x > 5, y == 'value')
-            left = Parser._parse_expression(node.left, alias)
+            left = Parser._parse_expression(node.left, alias, ptype)
 
             # We only handle the first comparator for simplicity
             # In a real implementation, we would handle multiple comparators
             op = node.ops[0]
-            right = Parser._parse_expression(node.comparators[0], alias)
+            right = Parser._parse_expression(node.comparators[0], alias, ptype)
 
             comp_op = Parser._get_comparison_operator(op)
 
@@ -161,8 +195,8 @@ class Parser:
 
         elif isinstance(node, ast.BinOp):
             # Handle binary operations (e.g., x + y, x - y, x * y)
-            left = Parser._parse_expression(node.left, alias)
-            right = Parser._parse_expression(node.right, alias)
+            left = Parser._parse_expression(node.left, alias, ptype)
+            right = Parser._parse_expression(node.right, alias, ptype)
 
             comp_op = Parser._get_binary_operator(node.op)
 
@@ -176,7 +210,7 @@ class Parser:
 
         elif isinstance(node, ast.BoolOp):
             # Handle boolean operations (e.g., x and y, x or y)
-            values = [Parser._parse_expression(val, alias) for val in node.values]
+            values = [Parser._parse_expression(val, alias, ptype) for val in node.values]
 
             # Combine the values with the appropriate operator
             comp_op = BinaryOperator("AND") if isinstance(node.op, ast.And) else BinaryOperator("OR")
@@ -203,8 +237,12 @@ class Parser:
             if isinstance(node.value, ast.Name):
                 # validate the column name
                 schema = alias[node.value.id]
-                # if not schema.validate_column(node.attr):
-                #     raise ValueError(f"Column '{node.attr}' not found in table schema '{schema}'")
+
+                if ptype == ParseType.select or ptype == ParseType.group_by:
+                    schema.columns[node.attr] = None
+
+                if not schema.validate_column(node.attr):
+                    raise ValueError(f"Column '{node.attr}' not found in table schema '{schema}'")
 
                 return ColumnReference(name=node.attr, table=schema.name)
             else:
@@ -228,12 +266,11 @@ class Parser:
                 return LiteralExpression(value=BooleanLiteral(False))
             else:
                 # This is a variable reference
-                # In a real implementation, we would handle this more robustly
                 return ColumnReference(name=node.id, table='')
 
         elif isinstance(node, ast.UnaryOp):
             # Handle unary operations (e.g., not x)
-            operand = Parser._parse_expression(node.operand, alias)
+            operand = Parser._parse_expression(node.operand, alias, ptype)
 
             # Ensure operand is an Expression object, not a list or tuple
             if isinstance(operand, list) or isinstance(operand, tuple):
@@ -256,9 +293,9 @@ class Parser:
         elif isinstance(node, ast.IfExp):
             # Handle conditional expressions (e.g., x if y else z)
             # In a real implementation, we would handle this more robustly
-            test = Parser._parse_expression(node.test, alias)
-            body = Parser._parse_expression(node.body, alias)
-            orelse = Parser._parse_expression(node.orelse, alias)
+            test = Parser._parse_expression(node.test, alias, ptype)
+            body = Parser._parse_expression(node.body, alias, ptype)
+            orelse = Parser._parse_expression(node.orelse, alias, ptype)
 
             # Ensure all values are Expression objects, not lists or tuples
             if isinstance(test, list) or isinstance(test, tuple):
@@ -276,14 +313,14 @@ class Parser:
             # This is used for array returns in lambdas like lambda x: [x.name, x.age]
             elements = []
             for elt in node.elts:
-                elements.append(Parser._parse_expression(elt, alias))
+                elements.append(Parser._parse_expression(elt, alias, ptype))
             return elements
 
         elif isinstance(node, ast.Tuple):
             # Handle Join with rename ( x.col1 == y.col1, [ (x_col1 := x.col1 ), (y_col1 := y.col1 ) ]
             elements = []
             for elt in node.elts:
-                elements.append(Parser._parse_expression(elt, alias))
+                elements.append(Parser._parse_expression(elt, alias, ptype))
             return elements
 
         elif isinstance(node, ast.Call):
@@ -296,13 +333,13 @@ class Parser:
                 # Parse the arguments to the function
 
                 for arg in node.args:
-                    parsed_arg = Parser._parse_expression(arg, alias)
+                    parsed_arg = Parser._parse_expression(arg, alias, ptype)
                     args_list.append(parsed_arg)
 
                 # Handle keyword arguments
                 # kwargs = {}
                 for kw in node.keywords:
-                    parsed_kw = Parser._parse_expression(kw.value, alias)
+                    parsed_kw = Parser._parse_expression(kw.value, alias, ptype)
                     # kwargs[kw.arg] = parsed_kw
                     args_list.append(parsed_kw)
 
@@ -324,12 +361,12 @@ class Parser:
             expr = []
             for value in node.values:
                 if isinstance(value, ast.Constant):
-                    expr.append(Parser._parse_expression(value, alias))
+                    expr.append(Parser._parse_expression(value, alias, ptype))
                 elif isinstance(value, ast.FormattedValue):
                     if value.format_spec is not None:
                         raise ValueError(f"Format Spec Not Supported: {value.format_spec}")
                     else:
-                        expr.append(Parser._parse_expression(value.value, alias))
+                        expr.append(Parser._parse_expression(value.value, alias, ptype))
 
             return FunctionExpression(StringConcatFunction(), expr)
 

@@ -3,7 +3,7 @@ import unittest
 from functions import StringConcatFunction, AggregateFunction, SumFunction, CountFunction, OverFunction, AvgFunction, \
     UnboundedFunction, RowsFunction
 from legendql import LegendQL
-from parser import Parser
+from parser import Parser, ParseType
 from metamodel import *
 
 
@@ -25,7 +25,7 @@ class ParserTest(unittest.TestCase):
     def test_filter(self):
         lq = LegendQL.from_("employee", {"start_date": str})
         filter = lambda e: e.start_date > '2021-01-01'
-        p = Parser.parse(filter, lq.schema)
+        p = Parser.parse(filter, lq.schema, ParseType.filter)
 
         self.assertEqual(p, BinaryExpression(
             left=ColumnReference(name='start_date', table='employee'),
@@ -36,7 +36,7 @@ class ParserTest(unittest.TestCase):
     def test_nested_filter(self):
         lq = LegendQL.from_("employee", {"start_date": str, "salary": str})
         filter = lambda e: (e.start_date > '2021-01-01') or (e.start_date < '2000-02-02') and (e.salary < 1_000_000)
-        p = Parser.parse(filter, lq.schema)
+        p = Parser.parse(filter, lq.schema, ParseType.filter)
 
         self.assertEqual(p, BinaryExpression(
             left=BinaryExpression(
@@ -62,7 +62,7 @@ class ParserTest(unittest.TestCase):
             (gross_salary := e.salary + 10),
             (gross_cost := gross_salary + e.benefits)]
 
-        p = Parser.parse(extend, lq.schema)
+        p = Parser.parse(extend, lq.schema, ParseType.extend)
 
         self.assertEqual(p, [
             ColumnExpression(
@@ -83,7 +83,7 @@ class ParserTest(unittest.TestCase):
     def test_sort(self):
         lq = LegendQL.from_("employee", {"sum_gross_cost": float, "country": str})
         sort = lambda e: [e.sum_gross_cost, -e.country]
-        p = Parser.parse(sort, lq.schema)
+        p = Parser.parse(sort, lq.schema, ParseType.order_by)
 
         self.assertEqual(p, [
             ColumnReference(name='sum_gross_cost', table='employee'),
@@ -94,7 +94,7 @@ class ParserTest(unittest.TestCase):
     def test_fstring(self):
         lq = LegendQL.from_("employee", {"title": str, "country": str})
         fstring = lambda e: (new_id := f"{e.title}_{e.country}")
-        p = Parser.parse(fstring, lq.schema)
+        p = Parser.parse(fstring, lq.schema, ParseType.extend)
 
         self.assertEqual(p, ColumnExpression(
             name='new_id',
@@ -113,7 +113,7 @@ class ParserTest(unittest.TestCase):
             [sum_salary := sum(r.salary + 1), count_dept := count(r.department_name)],
             having=sum_salary > 100_000)
 
-        p = Parser.parse(group, lq.schema)
+        p = Parser.parse(group, lq.schema, ParseType.group_by)
         print(p)
 
         f = FunctionExpression(
@@ -147,7 +147,7 @@ class ParserTest(unittest.TestCase):
         window = lambda r: (avg_val :=
                             over(r.location, avg(r.salary), sort=[r.emp_name, -r.location], frame=rows(0, unbounded())))
 
-        p = Parser.parse(window, lq.schema)
+        p = Parser.parse(window, lq.schema, ParseType.extend)
         print(p)
 
         f = ColumnExpression(

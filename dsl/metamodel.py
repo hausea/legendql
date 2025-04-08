@@ -141,6 +141,10 @@ class ExtendClause(Clause):
     expressions: List[Expression]
 
 @dataclass
+class RenameClause(Clause):
+    expressions: List[Expression]
+
+@dataclass
 class GroupByClause(Clause):
     expressions: List[Expression]
     #having: Expression
@@ -153,8 +157,13 @@ class DistinctClause(Clause):
 class LimitClause(Clause):
     value: IntegerLiteral
 
-class JoinType:
-    pass
+@dataclass
+class OffsetClause(Clause):
+    value: IntegerLiteral
+
+class JoinType(Enum):
+    INNER = "INNER"
+    LEFT = "LEFT"
 
 @dataclass
 class JoinClause(Clause):
@@ -162,3 +171,7 @@ class JoinClause(Clause):
     right: Schema
     condition: Expression
     type: JoinType
+
+@dataclass
+class OrderByClause(Clause):
+    expressions: List[Expression]
