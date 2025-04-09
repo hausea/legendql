@@ -4,7 +4,8 @@ from typing import List, Tuple
 
 from model.metamodel import SelectionClause, Runtime, DataFrame, FilterClause, ExtendClause, GroupByClause, \
     LimitClause, JoinClause, JoinType, JoinExpression, Clause, FromClause, Expression, IntegerLiteral, \
-    GroupByExpression, ColumnReferenceExpression, RenameClause, ColumnAliasExpression, OffsetClause
+    GroupByExpression, ColumnReferenceExpression, RenameClause, ColumnAliasExpression, OffsetClause, OrderByExpression, \
+    OrderByClause
 
 
 @dataclass
@@ -47,6 +48,10 @@ class LegendQL:
 
     def offset(self, offset: int) -> LegendQL:
         self._clauses.append(OffsetClause(IntegerLiteral(offset)))
+        return self
+
+    def order_by(self, *ordering: OrderByExpression) -> LegendQL:
+        self._clauses.append(OrderByClause(list(ordering)))
         return self
 
     def join(self, database: str, table: str, join_type: JoinType, on_clause: Expression) -> LegendQL:

@@ -100,8 +100,8 @@ class ParserTest(unittest.TestCase):
         p = Parser.parse(sort, lq.schema, ParseType.order_by)
 
         self.assertEqual(p, [
-            SortExpression(direction=AscendingSortType(), expression=ColumnReferenceExpression(name='sum_gross_cost')),
-            SortExpression(direction=DescendingSortType(), expression=ColumnReferenceExpression(name='country'))
+            OrderByExpression(direction=AscendingOrderType(), expression=ColumnReferenceExpression(name='sum_gross_cost')),
+            OrderByExpression(direction=DescendingOrderType(), expression=ColumnReferenceExpression(name='country'))
         ])
 
 
@@ -187,8 +187,8 @@ class ParserTest(unittest.TestCase):
                         function=AvgFunction(),
                         parameters=[ColumnAliasExpression("r", ColumnReferenceExpression(name='salary'))]),
                     [ColumnReferenceExpression(name='emp_name'),
-                     SortExpression(
-                         direction=DescendingSortType(),
+                     OrderByExpression(
+                         direction=DescendingOrderType(),
                          expression=ColumnAliasExpression("r", ColumnReferenceExpression(name='location')))],
                     FunctionExpression(
                         function=RowsFunction(),
@@ -196,6 +196,19 @@ class ParserTest(unittest.TestCase):
                                     FunctionExpression(function=UnboundedFunction(), parameters=[])])])))
 
         self.assertEqual(p, f)
+
+    def test_if(self):
+        lq = LegendQL.from_("employee", {"salary": float, "min_salary": float})
+        extend = lambda e: (gross_salary := e.salary if e.salary > 10 else e.min_salary)
+        p = Parser.parse(extend, lq.schema, ParseType.extend)
+
+        self.assertEqual(p, ComputedColumnAliasExpression(alias='gross_salary',
+                              expression=IfExpression(test=BinaryExpression(left=OperandExpression(expression=ColumnReferenceExpression(name='salary')),
+                                                                            right=OperandExpression(expression=LiteralExpression(literal=IntegerLiteral(val=10))),
+                                                                            operator=GreaterThanBinaryOperator()),
+                                                      body=ColumnReferenceExpression(name='salary'),
+                                                      orelse=ColumnReferenceExpression(name='min_salary'))));
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -4,8 +4,9 @@ from dialect.purerelation.dialect import NonExecutablePureRuntime
 from model.metamodel import IntegerLiteral, InnerJoinType, BinaryExpression, ColumnAliasExpression, LiteralExpression, \
     EqualsBinaryOperator, OperandExpression, FunctionExpression, \
     CountFunction, AddBinaryOperator, SubtractBinaryOperator, MultiplyBinaryOperator, DivideBinaryOperator, \
-    ColumnReferenceExpression, ComputedColumnAliasExpression, MapReduceExpression, LambdaExpression, VariableAliasExpression, \
-    AverageFunction
+    ColumnReferenceExpression, ComputedColumnAliasExpression, MapReduceExpression, LambdaExpression, \
+    VariableAliasExpression, \
+    AverageFunction, OrderByExpression, AscendingOrderType, DescendingOrderType
 from ql.legendql import LegendQL
 
 
@@ -132,4 +133,16 @@ class TestPureRelationDialect(unittest.TestCase):
         pure_relation = data_frame.executable_to_string()
         self.assertEqual(
             "#>{local::DuckDuckDatabase.table}#->drop(5)->from(local::DuckDuckRuntime)",
+            pure_relation)
+
+    def test_order_by(self):
+        runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
+        data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table")
+                      .order_by(
+                OrderByExpression(direction=AscendingOrderType(), expression=ColumnReferenceExpression(name="columnA")),
+                         OrderByExpression(direction=DescendingOrderType(), expression=ColumnReferenceExpression(name="columnB")))
+                      .bind(runtime))
+        pure_relation = data_frame.executable_to_string()
+        self.assertEqual(
+            "#>{local::DuckDuckDatabase.table}#->sort([~columnA->ascending(), ~columnB->descending()])->from(local::DuckDuckRuntime)",
             pure_relation)

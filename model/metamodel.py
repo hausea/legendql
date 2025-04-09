@@ -261,6 +261,7 @@ class IfExpression(Expression):
     test: Expression
     body: Expression
     orelse: Expression
+
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_if_expression(self, parameter)
 
@@ -270,26 +271,26 @@ class NotExpression(Expression):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_not_expression(self, parameter)
 
-class SortType(Expression, ABC):
+class OrderType(Expression, ABC):
     pass
 
 @dataclass
-class AscendingSortType(SortType):
+class AscendingOrderType(OrderType):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
-        return visitor.visit_ascending_sort_type(self, parameter)
+        return visitor.visit_ascending_order_type(self, parameter)
 
 @dataclass
-class DescendingSortType(SortType):
+class DescendingOrderType(OrderType):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
-        return visitor.visit_descending_sort_type(self, parameter)
+        return visitor.visit_descending_order_type(self, parameter)
 
 @dataclass
-class SortExpression(Expression):
-    direction: SortType
+class OrderByExpression(Expression):
+    direction: OrderType
     expression: Expression
 
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
-        return visitor.visit_sort_expression(self, parameter)
+        return visitor.visit_order_by_expression(self, parameter)
 
 @dataclass
 class FunctionExpression(Expression):
@@ -369,6 +370,13 @@ class DistinctClause(Clause):
         return visitor.visit_distinct_clause(self, parameter)
 
 @dataclass
+class OrderByClause(Clause):
+    ordering: List[OrderType]
+
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_order_by_clause(self, parameter)
+
+@dataclass
 class LimitClause(Clause):
     value: IntegerLiteral
 
@@ -419,13 +427,6 @@ class OffsetClause(Clause):
 
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_offset_clause(self, parameter)
-
-@dataclass
-class OrderByClause(Clause):
-    expressions: List[Expression]
-
-    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
-        return visitor.visit_order_by_clause(self, parameter)
 
 class Runtime(ABC):
     @abstractmethod
@@ -600,6 +601,10 @@ class ExecutionVisitor(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def visit_order_by_clause[P, T](self, val: OrderByClause, parameter: P) -> T:
+        raise NotImplementedError()
+
+    @abstractmethod
     def visit_limit_clause[P, T](self, val: LimitClause, parameter: P) -> T:
         raise NotImplementedError()
 
@@ -632,15 +637,15 @@ class ExecutionVisitor(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_sort_expression[P, T](self, val: SortExpression, parameter: P) -> T:
+    def visit_order_by_expression[P, T](self, val: OrderByExpression, parameter: P) -> T:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_ascending_sort_type[P, T](self, val: AscendingSortType, parameter: P) -> T:
+    def visit_ascending_order_type[P, T](self, val: AscendingOrderType, parameter: P) -> T:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_descending_sort_type[P, T](self, val: DescendingSortType, parameter: P) -> T:
+    def visit_descending_order_type[P, T](self, val: DescendingOrderType, parameter: P) -> T:
         raise NotImplementedError()
 
     @abstractmethod
@@ -649,10 +654,6 @@ class ExecutionVisitor(ABC):
 
     @abstractmethod
     def visit_offset_clause[P, T](self, val: OffsetClause, parameter: P) -> T:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def visit_order_by_clause[P, T](self, val: OrderByClause, parameter: P) -> T:
         raise NotImplementedError()
 
     @abstractmethod
