@@ -1,10 +1,10 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple
 
 from model.metamodel import SelectionClause, Runtime, DataFrame, FilterClause, ExtendClause, GroupByClause, \
     LimitClause, JoinClause, JoinType, JoinExpression, Clause, FromClause, Expression, IntegerLiteral, \
-    GroupByExpression, ColumnReferenceExpression
+    GroupByExpression, ColumnReferenceExpression, RenameClause, ColumnAliasExpression, OffsetClause
 
 
 @dataclass
@@ -25,6 +25,10 @@ class LegendQL:
         self._clauses.append(SelectionClause(list(map(lambda name: ColumnReferenceExpression(name), names))))
         return self
 
+    def rename(self, *renames: Tuple[str, str]) -> LegendQL:
+        self._clauses.append(RenameClause(list(map(lambda rename: ColumnAliasExpression(alias=rename[1], reference=ColumnReferenceExpression(name=rename[0])), renames))))
+        return self
+
     def extend(self, extend: List[ExtendExpression]) -> LegendQL:
         self._clauses.append(ExtendClause(extend))
         return self
@@ -39,6 +43,10 @@ class LegendQL:
 
     def limit(self, limit: int) -> LegendQL:
         self._clauses.append(LimitClause(IntegerLiteral(limit)))
+        return self
+
+    def offset(self, offset: int) -> LegendQL:
+        self._clauses.append(OffsetClause(IntegerLiteral(offset)))
         return self
 
     def join(self, database: str, table: str, join_type: JoinType, on_clause: Expression) -> LegendQL:

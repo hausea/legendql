@@ -125,7 +125,6 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
         return "->avg()"
 
     def visit_filter_clause(self, val: FilterClause, parameter: str) -> str:
-
         return "filter(" + val.expression.visit(self, "") + ")"
 
     def visit_selection_clause(self, val: SelectionClause, parameter: str) -> str:
@@ -183,10 +182,13 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
         raise NotImplementedError()
 
     def visit_rename_clause(self, val: RenameClause, parameter: str) -> str:
-        raise NotImplementedError()
+        renames = []
+        for columnAlias in val.columnAliases:
+            renames.append(f"rename(~{columnAlias.reference.visit(self, parameter)}, ~{columnAlias.alias})")
+        return "->".join(renames)
 
     def visit_offset_clause(self, val: OffsetClause, parameter: str) -> str:
-        raise NotImplementedError()
+        return f"drop({val.value.visit(self, parameter)})"
 
     def visit_order_by_clause(self, val: OrderByClause, parameter: str) -> str:
         raise NotImplementedError()

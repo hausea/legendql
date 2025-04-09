@@ -89,7 +89,7 @@ class TestPureRelationDialect(unittest.TestCase):
             "#>{local::DuckDuckDatabase.table}#->extend(~[a:a | $a.column, b:b | $b.column])->from(local::DuckDuckRuntime)",
             pure_relation)
 
-    def test_add_math_binary_operators(self):
+    def test_math_binary_operators(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
         data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table")
                       .extend([
@@ -102,4 +102,34 @@ class TestPureRelationDialect(unittest.TestCase):
         pure_relation = data_frame.executable_to_string()
         self.assertEqual(
             "#>{local::DuckDuckDatabase.table}#->extend(~[add:a | $a.column+$a.column, subtract:a | $a.column-$a.column, multiply:a | $a.column*$a.column, divide:a | $a.column/$a.column])->from(local::DuckDuckRuntime)",
+            pure_relation)
+
+    def test_single_rename(self):
+        runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
+        data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table")
+                      .rename(('column', 'newColumn'))
+                      .bind(runtime))
+        pure_relation = data_frame.executable_to_string()
+        self.assertEqual(
+            "#>{local::DuckDuckDatabase.table}#->rename(~column, ~newColumn)->from(local::DuckDuckRuntime)",
+            pure_relation)
+
+    def test_multiple_renames(self):
+        runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
+        data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table")
+                      .rename(('columnA', 'newColumnA'), ('columnB', 'newColumnB'))
+                      .bind(runtime))
+        pure_relation = data_frame.executable_to_string()
+        self.assertEqual(
+            "#>{local::DuckDuckDatabase.table}#->rename(~columnA, ~newColumnA)->rename(~columnB, ~newColumnB)->from(local::DuckDuckRuntime)",
+            pure_relation)
+
+    def test_offset(self):
+        runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
+        data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table")
+                      .offset(5)
+                      .bind(runtime))
+        pure_relation = data_frame.executable_to_string()
+        self.assertEqual(
+            "#>{local::DuckDuckDatabase.table}#->drop(5)->from(local::DuckDuckRuntime)",
             pure_relation)

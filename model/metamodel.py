@@ -318,7 +318,7 @@ class Clause(ABC):
 
 @dataclass
 class RenameClause(Clause):
-    expressions: List[Expression]
+    columnAliases: List[ColumnAliasExpression]
 
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_rename_clause(self, parameter)
