@@ -9,10 +9,10 @@ from model.metamodel import ExecutionVisitor, JoinClause, LimitClause, DistinctC
     GreaterThanEqualsBinaryOperator, GreaterThanBinaryOperator, NotEqualsBinaryOperator, EqualsBinaryOperator, \
     NotUnaryOperator, InnerJoinType, LeftJoinType, ColumnAliasExpression, \
     CountFunction, JoinExpression, Clause, FromClause, AddBinaryOperator, \
-    MultiplyBinaryOperator, SubtractBinaryOperator, DivideBinaryOperator, OrderByClause, OffsetClause, RenameClause, \
-    SortExpression, NotExpression, IfExpression, ColumnReferenceExpression, DateLiteral, GroupByExpression, \
+    MultiplyBinaryOperator, SubtractBinaryOperator, DivideBinaryOperator, OffsetClause, RenameClause, \
+    OrderByExpression, NotExpression, IfExpression, ColumnReferenceExpression, DateLiteral, GroupByExpression, \
     ComputedColumnAliasExpression, VariableAliasExpression, MapReduceExpression, LambdaExpression, AverageFunction, \
-    AscendingSortType, DescendingSortType
+    AscendingOrderType, DescendingOrderType, OrderByClause
 
 
 @dataclass
@@ -145,6 +145,9 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
     def visit_distinct_clause(self, val: DistinctClause, parameter: str) -> str:
         return "distinct(~[" + ", ".join(map(lambda expr: expr.visit(self, ""), val.expressions)) + "])"
 
+    def visit_order_by_clause(self, val: OrderByClause, parameter: str) -> str:
+        return "sort([" + ", ".join(map(lambda expr: expr.visit(self, ""), val.ordering)) + "])"
+
     def visit_limit_clause(self, val: LimitClause, parameter: str) -> str:
         return "limit(" + val.value.visit(self, "") + ")"
 
@@ -172,14 +175,14 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
     def visit_not_expression(self, val: NotExpression, parameter: str) -> str:
         raise NotImplementedError()
 
-    def visit_sort_expression(self, val: SortExpression, parameter: str) -> str:
-        raise NotImplementedError()
+    def visit_order_by_expression(self, val: OrderByExpression, parameter: str) -> str:
+        return f"~{val.expression.visit(self, parameter)}->{val.direction.visit(self, parameter)}()"
 
-    def visit_ascending_sort_type(self, val: AscendingSortType, parameter: str) -> str:
-        raise NotImplementedError()
+    def visit_ascending_order_type(self, val: AscendingOrderType, parameter: str) -> str:
+        return "ascending"
 
-    def visit_descending_sort_type(self, val: DescendingSortType, parameter: str) -> str:
-        raise NotImplementedError()
+    def visit_descending_order_type(self, val: DescendingOrderType, parameter: str) -> str:
+        return "descending"
 
     def visit_rename_clause(self, val: RenameClause, parameter: str) -> str:
         renames = []
@@ -189,9 +192,6 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
 
     def visit_offset_clause(self, val: OffsetClause, parameter: str) -> str:
         return f"drop({val.value.visit(self, parameter)})"
-
-    def visit_order_by_clause(self, val: OrderByClause, parameter: str) -> str:
-        raise NotImplementedError()
 
     def visit_in_binary_operator(self, self1, parameter: str) -> str:
         raise NotImplementedError()

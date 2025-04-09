@@ -8,20 +8,19 @@ import ast
 import importlib
 import inspect
 from _ast import operator
-from datetime import date
 from enum import Enum
 from typing import Callable, List, Union, Dict
 
 from functions import StringConcatFunction
 from model.metamodel import Expression, BinaryExpression, BinaryOperator, \
-    ColumnReferenceExpression, BooleanLiteral, IfExpression, NotExpression, SortExpression, SortType, \
+    ColumnReferenceExpression, BooleanLiteral, IfExpression, NotExpression, OrderByExpression, \
     FunctionExpression, \
     OperandExpression, AndBinaryOperator, OrBinaryOperator, IntegerLiteral, StringLiteral, EqualsBinaryOperator, \
     NotEqualsBinaryOperator, LessThanBinaryOperator, LessThanEqualsBinaryOperator, GreaterThanBinaryOperator, \
     GreaterThanEqualsBinaryOperator, InBinaryOperator, NotInBinaryOperator, IsBinaryOperator, IsNotBinaryOperator, \
     AddBinaryOperator, SubtractBinaryOperator, MultiplyBinaryOperator, DivideBinaryOperator, ModuloBinaryOperator, \
     ExponentBinaryOperator, BitwiseOrBinaryOperator, BitwiseAndBinaryOperator, DateLiteral, GroupByExpression, \
-    DescendingSortType, ComputedColumnAliasExpression
+    DescendingOrderType, ComputedColumnAliasExpression
 from dsl.schema import Schema
 
 class ParseType(Enum):
@@ -299,7 +298,7 @@ class Parser:
                     return operand
                 else:
                     #sort
-                    return SortExpression(direction=DescendingSortType(), expression=operand)
+                    return OrderByExpression(direction=DescendingOrderType(), expression=operand)
             else:
                 # Other unary operations (e.g., +, -)
                 # In a real implementation, we would handle this more robustly
