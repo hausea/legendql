@@ -17,10 +17,10 @@ class ParserTest(unittest.TestCase):
         join = lambda e, d: e.dept_id == d.id
         p = Parser.parse_join(join, lq.schema, jq.schema)
 
-        self.assertEqual(p, BinaryExpression(
-            left=OperandExpression(ColumnReference(name='dept_id', table='employee')),
-            right=OperandExpression(ColumnReference(name='id', table='department')),
-            operator=EqualsBinaryOperator()))
+        self.assertEqual(p, LambdaExpression(["e", "d"], BinaryExpression(
+            left=OperandExpression(ColumnAliasExpression("e", ColumnReferenceExpression(name='dept_id'))),
+            right=OperandExpression(ColumnAliasExpression("d", ColumnReferenceExpression(name='id'))),
+            operator=EqualsBinaryOperator())))
 
 
     def test_filter(self):
@@ -28,10 +28,10 @@ class ParserTest(unittest.TestCase):
         filter = lambda e: e.start_date > date(2021, 1, 1)
         p = Parser.parse(filter, lq.schema, ParseType.filter)
 
-        self.assertEqual(p, BinaryExpression(
-            left=OperandExpression(ColumnReference(name='start_date', table='employee')),
+        self.assertEqual(p, LambdaExpression(["e"], BinaryExpression(
+            left=OperandExpression(ColumnAliasExpression("e", ColumnReferenceExpression(name='start_date'))),
             right=OperandExpression(LiteralExpression(DateLiteral(date(2021, 1, 1)))),
-            operator=GreaterThanBinaryOperator()))  # add assertion here
+            operator=GreaterThanBinaryOperator())))  # add assertion here
 
 
     def test_nested_filter(self):
@@ -39,11 +39,11 @@ class ParserTest(unittest.TestCase):
         filter = lambda e: (e.start_date > date(2021, 1, 1)) or (e.start_date < date(2000, 2, 2)) and (e.salary < 1_000_000)
         p = Parser.parse(filter, lq.schema, ParseType.filter)
 
-        self.assertEqual(p, BinaryExpression(
+        self.assertEqual(p, LambdaExpression(["e"], BinaryExpression(
             left=OperandExpression(
                 BinaryExpression(
                     left=OperandExpression(
-                        ColumnReference(name='start_date', table='employee')),
+                        ColumnAliasExpression("e", ColumnReferenceExpression(name='start_date'))),
                     right=OperandExpression(
                         LiteralExpression(DateLiteral(date(2021, 1, 1)))),
                     operator=GreaterThanBinaryOperator())),
@@ -52,19 +52,19 @@ class ParserTest(unittest.TestCase):
                     left=OperandExpression(
                         BinaryExpression(
                             left=OperandExpression(
-                                ColumnReference(name='start_date', table='employee')),
+                                ColumnAliasExpression("e", ColumnReferenceExpression(name='start_date'))),
                             right=OperandExpression(
                                 LiteralExpression(DateLiteral(date(2000, 2, 2)))),
                             operator=LessThanBinaryOperator())),
                     right=OperandExpression(
                         BinaryExpression(
                             left=OperandExpression(
-                                ColumnReference(name='salary', table='employee')),
+                                ColumnAliasExpression("e", ColumnReferenceExpression(name='salary'))),
                             right=OperandExpression(
                                 LiteralExpression(IntegerLiteral(1000000))),
                             operator=LessThanBinaryOperator())),
                     operator=AndBinaryOperator())),
-            operator=OrBinaryOperator()))
+            operator=OrBinaryOperator())))
 
 
     def test_extend(self):
@@ -76,19 +76,22 @@ class ParserTest(unittest.TestCase):
         p = Parser.parse(extend, lq.schema, ParseType.extend)
 
         self.assertEqual(p, [
-            ColumnExpression(
-                name='gross_salary',
-                expression=BinaryExpression(
-                    left=OperandExpression(ColumnReference(name='salary', table='employee')),
-                    right=OperandExpression(LiteralExpression(IntegerLiteral(10))),
-                    operator=AddBinaryOperator())),
-            ColumnExpression(
-                name='gross_cost',
-                expression=BinaryExpression(
-                    left=OperandExpression(ColumnReference(name='gross_salary', table='')),
-                    right=OperandExpression(ColumnReference(name='benefits', table='employee')),
-                    operator=AddBinaryOperator()))
-        ])
+            ComputedColumnAliasExpression(
+                alias='gross_salary',
+                expression=LambdaExpression(
+                    ["e"],
+                    BinaryExpression(
+                        left=OperandExpression(ColumnAliasExpression("e", ColumnReferenceExpression('salary'))),
+                        right=OperandExpression(LiteralExpression(IntegerLiteral(10))),
+                        operator=AddBinaryOperator()))),
+            ComputedColumnAliasExpression(
+                alias="gross_cost",
+                expression=LambdaExpression(
+                    ["e"],
+                    BinaryExpression(
+                        left=OperandExpression(ColumnAliasExpression("e", ColumnReferenceExpression("gross_salary"))),
+                        right=OperandExpression(ColumnAliasExpression("e", ColumnReferenceExpression("benefits"))),
+                        operator=AddBinaryOperator())))])
 
 
     def test_sort(self):
@@ -97,8 +100,8 @@ class ParserTest(unittest.TestCase):
         p = Parser.parse(sort, lq.schema, ParseType.order_by)
 
         self.assertEqual(p, [
-            ColumnReference(name='sum_gross_cost', table='employee'),
-            SortExpression(direction=Sort.DESC, expression=ColumnReference(name='country', table='employee'))
+            SortExpression(direction=AscendingSortType(), expression=ColumnReferenceExpression(name='sum_gross_cost')),
+            SortExpression(direction=DescendingSortType(), expression=ColumnReferenceExpression(name='country'))
         ])
 
 
@@ -107,14 +110,14 @@ class ParserTest(unittest.TestCase):
         fstring = lambda e: (new_id := f"{e.title}_{e.country}")
         p = Parser.parse(fstring, lq.schema, ParseType.extend)
 
-        self.assertEqual(p, ColumnExpression(
-            name='new_id',
-            expression=FunctionExpression(
+        self.assertEqual(p, ComputedColumnAliasExpression(
+            alias='new_id',
+            expression=LambdaExpression(["e"], FunctionExpression(
                 function=StringConcatFunction(),
                 parameters=[
-                    ColumnReference(name='title', table='employee'),
+                    ColumnAliasExpression("e", ColumnReferenceExpression(name='title')),
                     LiteralExpression(StringLiteral("_")),
-                    ColumnReference(name='country', table='employee')])))
+                    ColumnAliasExpression("e", ColumnReferenceExpression(name='country'))]))))
 
 
     def test_aggregate(self):
@@ -125,31 +128,45 @@ class ParserTest(unittest.TestCase):
             having=sum_salary > 100_000)
 
         p = Parser.parse(group, lq.schema, ParseType.group_by)
-        print(p)
-
-        f = FunctionExpression(
-            function=AggregateFunction(),
-            parameters=[
-                [ColumnReference(name='id', table='employee'),
-                 ColumnReference(name='name', table='employee')],
-                [ColumnExpression(
-                    name='sum_salary',
-                    expression=FunctionExpression(
-                        function=SumFunction(),
-                        parameters=[BinaryExpression(
-                            left=OperandExpression(ColumnReference(name='salary', table='employee')),
-                            right=OperandExpression(LiteralExpression(IntegerLiteral(1))),
-                            operator=AddBinaryOperator())])),
-                 ColumnExpression(
-                    name='count_dept',
-                    expression=FunctionExpression(
-                        function=CountFunction(),
-                        parameters=[ColumnReference(name='department_name', table='employee')]))],
-                BinaryExpression(
-                    left=OperandExpression(ColumnReference(name='sum_salary', table='')),
-                    right=OperandExpression(LiteralExpression(IntegerLiteral(100000))),
-                    operator=GreaterThanBinaryOperator())])
-        print(f)
+        f = GroupByExpression(
+            selections=[ColumnReferenceExpression(name="id"), ColumnReferenceExpression(name='name')],
+            expressions=[ComputedColumnAliasExpression(
+                alias='sum_salary',
+                expression=MapReduceExpression(
+                    map_expression=LambdaExpression(
+                        parameters=["r"],
+                        expression=ColumnAliasExpression(
+                            alias="r",
+                            reference=ColumnReferenceExpression("salary"))),
+                    reduce_expression=LambdaExpression(
+                        parameters=["r"],
+                        expression=FunctionExpression(
+                            function=SumFunction(),
+                            parameters=[BinaryExpression(
+                                left=OperandExpression(
+                                    ColumnAliasExpression(
+                                        alias="r",
+                                        reference=ColumnReferenceExpression("salary"))),
+                                right=OperandExpression(
+                                    LiteralExpression(
+                                        literal=IntegerLiteral(1))),
+                                operator=AddBinaryOperator())]))
+                )),
+                ComputedColumnAliasExpression(
+                    alias='count_dept',
+                    expression=MapReduceExpression(
+                        map_expression=LambdaExpression(
+                            parameters=["r"],
+                            expression=ColumnReferenceExpression(name='department_name')),
+                        reduce_expression=LambdaExpression(
+                            parameters=["r"],
+                            expression=FunctionExpression(
+                                function=CountFunction(),
+                                parameters=[ColumnAliasExpression(
+                                    alias="r",
+                                    reference=ColumnReferenceExpression("department_name"))])))
+                )]
+            )
 
         self.assertEqual(str(p), str(f))
 
@@ -159,25 +176,24 @@ class ParserTest(unittest.TestCase):
                             over(r.location, avg(r.salary), sort=[r.emp_name, -r.location], frame=rows(0, unbounded())))
 
         p = Parser.parse(window, lq.schema, ParseType.extend)
-        print(p)
 
-        f = ColumnExpression(
-            name='avg_val',
-            expression=FunctionExpression(
+        f = ComputedColumnAliasExpression(
+            alias='avg_val',
+            expression=LambdaExpression(["r"], FunctionExpression(
                 function=OverFunction(),
                 parameters=[
-                    ColumnReference(name='location', table='employee'),
+                    ColumnAliasExpression("r", ColumnReferenceExpression(name='location')),
                     FunctionExpression(
                         function=AvgFunction(),
-                        parameters=[ColumnReference(name='salary', table='employee')]),
-                    [ColumnReference(name='emp_name', table='employee'),
+                        parameters=[ColumnAliasExpression("r", ColumnReferenceExpression(name='salary'))]),
+                    [ColumnReferenceExpression(name='emp_name'),
                      SortExpression(
-                         direction=Sort.DESC,
-                         expression=ColumnReference(name='location', table='employee'))],
+                         direction=DescendingSortType(),
+                         expression=ColumnAliasExpression("r", ColumnReferenceExpression(name='location')))],
                     FunctionExpression(
                         function=RowsFunction(),
                         parameters=[LiteralExpression(IntegerLiteral(0)),
-                                    FunctionExpression(function=UnboundedFunction(), parameters=[])])]))
+                                    FunctionExpression(function=UnboundedFunction(), parameters=[])])])))
 
         self.assertEqual(p, f)
 

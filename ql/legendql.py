@@ -4,7 +4,7 @@ from typing import List
 
 from model.metamodel import SelectionClause, Runtime, DataFrame, FilterClause, ExtendClause, GroupByClause, \
     LimitClause, JoinClause, JoinType, JoinExpression, Clause, FromClause, Expression, IntegerLiteral, \
-    SelectionExpression, GroupByExpression, ExtendExpression
+    GroupByExpression, ColumnReferenceExpression
 
 
 @dataclass
@@ -22,7 +22,7 @@ class LegendQL:
         return self.bind(runtime).eval()
 
     def select(self, *names: str) -> LegendQL:
-        self._clauses.append(SelectionClause(list(map(lambda name: SelectionExpression(name), names))))
+        self._clauses.append(SelectionClause(list(map(lambda name: ColumnReferenceExpression(name), names))))
         return self
 
     def extend(self, extend: List[ExtendExpression]) -> LegendQL:

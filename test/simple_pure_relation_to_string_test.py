@@ -1,10 +1,11 @@
 import unittest
 
 from dialect.purerelation.dialect import NonExecutablePureRuntime
-from model.metamodel import IntegerLiteral, InnerJoinType, BinaryExpression, ReferenceExpression, LiteralExpression, \
-    EqualsBinaryOperator, OperandExpression, AliasExpression, ExtendExpression, GroupByExpression, FunctionExpression, \
+from model.metamodel import IntegerLiteral, InnerJoinType, BinaryExpression, ColumnAliasExpression, LiteralExpression, \
+    EqualsBinaryOperator, OperandExpression, FunctionExpression, \
     CountFunction, AddBinaryOperator, SubtractBinaryOperator, MultiplyBinaryOperator, DivideBinaryOperator, \
-    SelectionExpression
+    ColumnReferenceExpression, ComputedColumnAliasExpression, MapReduceExpression, LambdaExpression, VariableAliasExpression, \
+    AverageFunction
 from ql.legendql import LegendQL
 
 
@@ -25,7 +26,7 @@ class TestPureRelationDialect(unittest.TestCase):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
         data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table")
          .select("column")
-         .filter(BinaryExpression(OperandExpression(ReferenceExpression("a", "column")), OperandExpression(LiteralExpression(IntegerLiteral(1))), EqualsBinaryOperator()))
+         .filter(LambdaExpression(["a"], BinaryExpression(OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), OperandExpression(LiteralExpression(IntegerLiteral(1))), EqualsBinaryOperator())))
          .bind(runtime))
         pure_relation = data_frame.executable_to_string()
         self.assertEqual("#>{local::DuckDuckDatabase.table}#->select(~[column])->filter(a | $a.column==1)->from(local::DuckDuckRuntime)", pure_relation)
@@ -34,7 +35,7 @@ class TestPureRelationDialect(unittest.TestCase):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
         data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table")
          .select("column")
-         .extend([ExtendExpression("a", ReferenceExpression("a", "column"))])
+         .extend([ComputedColumnAliasExpression("a", LambdaExpression(["a"], ColumnAliasExpression("a", ColumnReferenceExpression("column"))))])
          .bind(runtime))
         pure_relation = data_frame.executable_to_string()
         self.assertEqual("#>{local::DuckDuckDatabase.table}#->select(~[column])->extend(~[a:a | $a.column])->from(local::DuckDuckRuntime)", pure_relation)
@@ -42,13 +43,22 @@ class TestPureRelationDialect(unittest.TestCase):
     def test_simple_select_with_groupBy(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
         data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table")
-         .select("column")
-         .group_by([SelectionExpression("column")], [SelectionExpression("count", FunctionExpression(CountFunction(), [AliasExpression("a")]))])
+         .select("column", "column2")
+         .group_by([ColumnReferenceExpression("column"), ColumnReferenceExpression("column2")],
+                   [ComputedColumnAliasExpression("count",
+                                                  MapReduceExpression(
+                                                      LambdaExpression(["a"], BinaryExpression(OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column2"))), AddBinaryOperator())),
+                                                      LambdaExpression(["a"], FunctionExpression(CountFunction(), [VariableAliasExpression("a")])))),
+                             ComputedColumnAliasExpression("avg",
+                                                  MapReduceExpression(
+                                                      LambdaExpression(["a"], ColumnAliasExpression("a", ColumnReferenceExpression("column"))),
+                                                      LambdaExpression(["a"], FunctionExpression(AverageFunction(), [VariableAliasExpression("a")]))))
+                    ])
          .bind(runtime))
         pure_relation = data_frame.executable_to_string()
-        # self.assertEqual("#>{local::DuckDuckDatabase.table}#->select(~[column])->groupBy(~[column], ~[count: a | $a.column : a | $a->count()])->from(local::DuckDuckRuntime)", pure_relation)
-        #TODO: AJH: need to fix the dialect
-        self.assertEqual("#>{local::DuckDuckDatabase.table}#->select(~[column])->groupBy(~[column], ~[count])->from(local::DuckDuckRuntime)", pure_relation)
+        self.assertEqual(
+            "#>{local::DuckDuckDatabase.table}#->select(~[column, column2])->groupBy(~[column, column2], ~[count:a | $a.column+$a.column2 : a | $a->count(), avg:a | $a.column : a | $a->avg()])->from(local::DuckDuckRuntime)",
+            pure_relation)
 
     def test_simple_select_with_limit(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
@@ -63,7 +73,7 @@ class TestPureRelationDialect(unittest.TestCase):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
         data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table")
           .select("column")
-          .join("local::DuckDuckDatabase", "table2", InnerJoinType(), BinaryExpression(OperandExpression(ReferenceExpression("a", "column")), OperandExpression(ReferenceExpression("b", "column")), EqualsBinaryOperator()))
+          .join("local::DuckDuckDatabase", "table2", InnerJoinType(), LambdaExpression(["a", "b"], BinaryExpression(OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), OperandExpression(ColumnAliasExpression("b", ColumnReferenceExpression("column"))), EqualsBinaryOperator())))
           .select("column2")
           .bind(runtime))
         pure_relation = data_frame.executable_to_string()
@@ -72,7 +82,7 @@ class TestPureRelationDialect(unittest.TestCase):
     def test_multiple_extends(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
         data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table")
-                      .extend([ExtendExpression("a", ReferenceExpression("a", "column")), ExtendExpression("b", ReferenceExpression("b", "column"))])
+                      .extend([ComputedColumnAliasExpression("a", LambdaExpression(["a"], ColumnAliasExpression("a", ColumnReferenceExpression("column")))), ComputedColumnAliasExpression("b", LambdaExpression(["b"], ColumnAliasExpression("b", ColumnReferenceExpression("column"))))])
                       .bind(runtime))
         pure_relation = data_frame.executable_to_string()
         self.assertEqual(
@@ -83,10 +93,10 @@ class TestPureRelationDialect(unittest.TestCase):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
         data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table")
                       .extend([
-                                  ExtendExpression("add", BinaryExpression(left=OperandExpression(ReferenceExpression("a", "column")), right=OperandExpression(ReferenceExpression("a", "column")), operator=AddBinaryOperator())),
-                                  ExtendExpression("subtract", BinaryExpression(left=OperandExpression(ReferenceExpression("a", "column")), right=OperandExpression(ReferenceExpression("a", "column")), operator=SubtractBinaryOperator())),
-                                  ExtendExpression("multiply", BinaryExpression(left=OperandExpression(ReferenceExpression("a", "column")), right=OperandExpression(ReferenceExpression("a", "column")), operator=MultiplyBinaryOperator())),
-                                  ExtendExpression("divide", BinaryExpression(left=OperandExpression(ReferenceExpression("a", "column")), right=OperandExpression(ReferenceExpression("a", "column")), operator=DivideBinaryOperator())),
+                                  ComputedColumnAliasExpression("add", LambdaExpression(["a"], BinaryExpression(left=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), right=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), operator=AddBinaryOperator()))),
+                                  ComputedColumnAliasExpression("subtract", LambdaExpression(["a"], BinaryExpression(left=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), right=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), operator=SubtractBinaryOperator()))),
+                                  ComputedColumnAliasExpression("multiply", LambdaExpression(["a"], BinaryExpression(left=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), right=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), operator=MultiplyBinaryOperator()))),
+                                  ComputedColumnAliasExpression("divide", LambdaExpression(["a"], BinaryExpression(left=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), right=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), operator=DivideBinaryOperator()))),
                               ])
                       .bind(runtime))
         pure_relation = data_frame.executable_to_string()

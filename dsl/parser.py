@@ -13,14 +13,15 @@ from enum import Enum
 from typing import Callable, List, Union, Dict
 
 from functions import StringConcatFunction
-from model.metamodel import Expression, ColumnExpression, BinaryExpression, BinaryOperator, \
-    ColumnReference, BooleanLiteral, IfExpression, NotExpression, SortExpression, Sort, FunctionExpression, \
+from model.metamodel import Expression, BinaryExpression, BinaryOperator, \
+    ColumnReferenceExpression, BooleanLiteral, IfExpression, NotExpression, SortExpression, SortType, \
+    FunctionExpression, \
     OperandExpression, AndBinaryOperator, OrBinaryOperator, IntegerLiteral, StringLiteral, EqualsBinaryOperator, \
     NotEqualsBinaryOperator, LessThanBinaryOperator, LessThanEqualsBinaryOperator, GreaterThanBinaryOperator, \
     GreaterThanEqualsBinaryOperator, InBinaryOperator, NotInBinaryOperator, IsBinaryOperator, IsNotBinaryOperator, \
     AddBinaryOperator, SubtractBinaryOperator, MultiplyBinaryOperator, DivideBinaryOperator, ModuloBinaryOperator, \
-    ExponentBinaryOperator, BitwiseOrBinaryOperator, BitwiseAndBinaryOperator, DateLiteral, LiteralExpression, \
-    GroupByClause, GroupByExpression
+    ExponentBinaryOperator, BitwiseOrBinaryOperator, BitwiseAndBinaryOperator, DateLiteral, GroupByExpression, \
+    DescendingSortType, ComputedColumnAliasExpression
 from dsl.schema import Schema
 
 class ParseType(Enum):
@@ -177,7 +178,7 @@ class Parser:
                     raise ValueError(f"You can only rename columns in rename() and join() no expressions allowed: {node.value}")
 
             if isinstance(expr, Expression):
-                return ColumnExpression(name=target_name, expression=expr)
+                return ComputedColumnAliasExpression(alias=target_name, expression=expr)
             else:
                 raise ValueError(f"Unknown expression: {node.value}, {expr}")
 
@@ -251,7 +252,7 @@ class Parser:
                 if not schema.validate_column(node.attr):
                     raise ValueError(f"Column '{node.attr}' not found in table schema '{schema}'")
 
-                return ColumnReference(name=node.attr, table=schema.name)
+                return ColumnReferenceExpression(name=node.attr)
             else:
                 raise ValueError(f"Unsupported Column Reference {node.value}")
 
@@ -280,7 +281,7 @@ class Parser:
                 return LiteralExpression(BooleanLiteral(False))
             else:
                 # This is a variable reference
-                return ColumnReference(name=node.id, table='')
+                return ColumnReferenceExpression(name=node.id)
 
         elif isinstance(node, ast.UnaryOp):
             # Handle unary operations (e.g., not x)
@@ -298,7 +299,7 @@ class Parser:
                     return operand
                 else:
                     #sort
-                    return SortExpression(direction=Sort.DESC, expression=operand)
+                    return SortExpression(direction=DescendingSortType(), expression=operand)
             else:
                 # Other unary operations (e.g., +, -)
                 # In a real implementation, we would handle this more robustly

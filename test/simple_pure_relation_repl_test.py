@@ -1,8 +1,9 @@
 import unittest
 
-from model.metamodel import BinaryExpression, OperandExpression, ReferenceExpression, LiteralExpression, \
-    IntegerLiteral, EqualsBinaryOperator, AliasExpression, ExtendExpression, GroupByExpression, \
-    FunctionExpression, CountFunction, InnerJoinType
+from model.metamodel import BinaryExpression, OperandExpression, ColumnAliasExpression, LiteralExpression, \
+    IntegerLiteral, EqualsBinaryOperator, \
+    FunctionExpression, CountFunction, InnerJoinType, ColumnReferenceExpression, ComputedColumnAliasExpression, \
+    MapReduceExpression, LambdaExpression, VariableAliasExpression
 from ql.legendql import LegendQL
 from runtime.pure.repl_utils import is_repl_running, send_to_repl, load_csv_to_repl
 from runtime.pure.runtime import ReplRuntime
@@ -38,12 +39,16 @@ class TestPureRelationDialect(unittest.TestCase):
     def test_complex_query(self):
         runtime = ReplRuntime("local::DuckDuckRuntime")
         data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "employees")
-         .filter(BinaryExpression(OperandExpression(ReferenceExpression("r", "departmentId")), OperandExpression(LiteralExpression(IntegerLiteral(1))), EqualsBinaryOperator()))
+         .filter(LambdaExpression(["r"], BinaryExpression(OperandExpression(ColumnAliasExpression("r", ColumnReferenceExpression("departmentId"))), OperandExpression(LiteralExpression(IntegerLiteral(1))), EqualsBinaryOperator())))
          .select("departmentId")
-         .extend([ExtendExpression("newCol", ReferenceExpression("x", "departmentId"))])
-         .group_by(["newCol"], [GroupByExpression("count", ReferenceExpression("x", "newCol"), FunctionExpression(CountFunction(), [AliasExpression("x")]))])
+         .extend([ComputedColumnAliasExpression("newCol", LambdaExpression(["x"], ColumnAliasExpression("x", ColumnReferenceExpression("departmentId"))))])
+         .group_by([ColumnReferenceExpression("newCol")],
+                   [ComputedColumnAliasExpression("count",
+                                                 MapReduceExpression(
+                                                     LambdaExpression(["x"], ColumnAliasExpression("x", ColumnReferenceExpression("newCol"))),
+                                                     LambdaExpression(["x"], FunctionExpression(CountFunction(), [VariableAliasExpression("x")]))))])
          .limit(1)
-         .join("local::DuckDuckDatabase", "departments", InnerJoinType(), BinaryExpression(OperandExpression(ReferenceExpression("a", "newCol")), OperandExpression(ReferenceExpression("b", "id")), EqualsBinaryOperator()))
+         .join("local::DuckDuckDatabase", "departments", InnerJoinType(), LambdaExpression(["a", "b"], BinaryExpression(OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("newCol"))), OperandExpression(ColumnAliasExpression("b", ColumnReferenceExpression("id"))), EqualsBinaryOperator())))
          .select("id")
          .bind(runtime))
         results = data_frame.eval()
