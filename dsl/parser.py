@@ -8,14 +8,10 @@ import ast
 import importlib
 import inspect
 from _ast import operator, arg
-from datetime import date
 from enum import Enum
 from typing import Callable, List, Union, Dict, Tuple
-from unittest import case
 
-from duckdb.duckdb import alias
-
-from functions import StringConcatFunction
+from model.functions import StringConcatFunction
 from model.metamodel import Expression, BinaryExpression, BinaryOperator, \
     ColumnReferenceExpression, BooleanLiteral, IfExpression, NotExpression, OrderByExpression, \
     FunctionExpression, \
@@ -26,7 +22,7 @@ from model.metamodel import Expression, BinaryExpression, BinaryOperator, \
     ExponentBinaryOperator, BitwiseOrBinaryOperator, BitwiseAndBinaryOperator, DateLiteral, GroupByExpression, \
     DescendingOrderType, ComputedColumnAliasExpression, AscendingOrderType, ColumnAliasExpression, LambdaExpression, \
     VariableAliasExpression, MapReduceExpression
-from dsl.schema import Schema
+from model.schema import Schema
 
 class ParseType(Enum):
     extend = "extend"
@@ -65,7 +61,7 @@ class Parser:
         match ptype:
             case ParseType.select:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                new_schema = Schema(schemas[0].name, {})
+                new_schema = Schema(schemas[0].database, schemas[0].table, {})
                 return (Parser._parse_select(lambda_node.body, new_schema), new_schema)
             case ParseType.filter:
                 Parser._validate_lambda_args_length(lambda_args, 1)
@@ -76,7 +72,9 @@ class Parser:
                 new_schema = schemas[0]
                 return (Parser._parse_extend(lambda_node.body, lambda_args, new_schema), new_schema)
             case ParseType.join:
-                new_schema = Schema("_".join(map(lambda s: s.name, schemas)), {})
+                new_database = "_".join(map(lambda s: s.database, schemas))
+                new_table = "_".join(map(lambda s: s.table, schemas))
+                new_schema = Schema(new_database, new_table, {})
                 for s in schemas:
                     new_schema.columns.update(s.columns)
                 Parser._validate_lambda_args_length(lambda_args, 2)
@@ -187,7 +185,7 @@ class Parser:
                 raise ValueError(f"An aggregate function requires 2 or 3 arguments: {node.args}")
 
             # capture the columns we're going to group by
-            group_by_schema = Schema(new_schema.name, {})
+            group_by_schema = Schema(new_schema.database, new_schema.table, {})
             selections = Parser._parse_select(node.args[0], group_by_schema)
 
             expressions_and_aliases = list(map(lambda n: Parser._parse_group_by_map_aggregate(n, args, new_schema, group_by_schema), node.args[1].elts if isinstance(node.args[1], ast.List) or isinstance(node.args[1], ast.Tuple) else [node.args[1]]))
@@ -211,7 +209,7 @@ class Parser:
             if isinstance(node.value, ast.Call):
                 map_expression = LambdaExpression(list(map(lambda a: a.arg, args)), Parser._parse_lambda_body(node.value.args[0], args, full_schema))
                 # very brittle, lots more checks needed here
-                module = importlib.import_module("functions")
+                module = importlib.import_module("model.functions")
                 class_ = getattr(module, f"{node.value.func.id.title()}Function")
                 function_instance = class_()
                 function_argument = args[0].arg
@@ -432,6 +430,9 @@ class Parser:
 
             if node.func.id == "date":
                 from model.metamodel import LiteralExpression
+                from datetime import date
+                # random use of date to prevent auto-format refactorings deleting the import
+                date(1999, 1, 1)
                 compiled = compile(ast.fix_missing_locations(ast.Expression(body=node)), '', 'eval')
                 val = eval(compiled, None, None)
                 return LiteralExpression(literal=DateLiteral(val))
@@ -440,7 +441,7 @@ class Parser:
             #    ValueError(f"Unknown function name: {node.func.id}")
 
             # very brittle, lots more checks needed here
-            module = importlib.import_module("functions")
+            module = importlib.import_module("model.functions")
             class_ = getattr(module, f"{node.func.id.title()}Function")
             instance = class_()
             return FunctionExpression(instance, parameters=args_list)

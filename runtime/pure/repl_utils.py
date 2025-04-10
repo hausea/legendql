@@ -24,7 +24,7 @@ def start_repl():
         print("REPL is already running.")
         return
 
-    cmd = "java -jar ../legend-engine-repl-relational-4.74.1-SNAPSHOT.jar"
+    cmd = "java -jar ../../legend-engine-repl-relational-4.74.1-SNAPSHOT.jar"
     print(f"Starting REPL with command: {cmd}")
 
     repl_process = subprocess.Popen(
