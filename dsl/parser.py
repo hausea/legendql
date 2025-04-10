@@ -42,7 +42,7 @@ class ParseType(Enum):
 class Parser:
 
     @staticmethod
-    def parse[E: Expression](func: Callable, schemas: [Schema], ptype: ParseType) -> Union[E, List[E]]:
+    def parse[E: Expression](func: Callable, schemas: [Schema], ptype: ParseType) -> Tuple[Union[E, List[E], Schema]]:
         """
         Parse a lambda function and convert it to an Expression or list of Expressions.
 
@@ -62,35 +62,38 @@ class Parser:
         lambda_node = Parser._get_lambda_node(func)
         lambda_args = lambda_node.args.args
 
-        all_schemas = {}
-        for i in range(len(lambda_args)):
-            all_schemas[lambda_args[i].arg] = schemas[i]
-
         match ptype:
             case ParseType.select:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                return Parser._parse_select(lambda_node.body)
+                new_schema = Schema(schemas[0].name, {})
+                return (Parser._parse_select(lambda_node.body, new_schema), new_schema)
             case ParseType.filter:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                return Parser._parse_filter(lambda_node.body, all_schemas, lambda_args)
+                new_schema = schemas[0]
+                return (Parser._parse_filter(lambda_node.body, lambda_args, new_schema), new_schema)
             case ParseType.extend:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                return Parser._parse_extend(lambda_node.body, all_schemas, lambda_args)
+                new_schema = schemas[0]
+                return (Parser._parse_extend(lambda_node.body, lambda_args, new_schema), new_schema)
             case ParseType.join:
+                new_schema = Schema("_".join(map(lambda s: s.name, schemas)), {})
+                for s in schemas:
+                    new_schema.columns.update(s.columns)
                 Parser._validate_lambda_args_length(lambda_args, 2)
-                return Parser._parse_join(lambda_node.body, all_schemas, lambda_args)
+                return (Parser._parse_join(lambda_node.body, lambda_args, new_schema), new_schema)
             case ParseType.rename:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                return Parser._parse_rename(lambda_node.body)
+                return (Parser._parse_rename(lambda_node.body), schemas[0])
             case ParseType.group_by:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                return Parser._parse_group_by(lambda_node.body, all_schemas, lambda_args)
+                new_schema = schemas[0]
+                return (Parser._parse_group_by(lambda_node.body, lambda_args, new_schema), new_schema)
             case ParseType.order_by:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                return Parser._parse_order_by(lambda_node.body, all_schemas, lambda_args)
+                return (Parser._parse_order_by(lambda_node.body, lambda_args), schemas[0])
             case ParseType.over:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                return Parser._parse_over(lambda_node.body, all_schemas, lambda_args)
+                return (Parser._parse_over(lambda_node.body, lambda_args), schemas[0])
             case _:
                 raise ValueError(f"Unknown ParseType: {ptype}")
 
@@ -127,49 +130,49 @@ class Parser:
             raise ValueError(f"Lambda MUST have exactly {length} argument(s): {args}")
 
     @staticmethod
-    def _parse_select(node: ast.AST) -> [ColumnReferenceExpression]:
+    def _parse_select(node: ast.AST, new_schema: Schema) -> [ColumnReferenceExpression]:
         if isinstance(node, ast.List):
-            return [item for sublist in map(lambda n: Parser._parse_select(n), node.elts) for item in sublist]
+            return [item for sublist in map(lambda n: Parser._parse_select(n, new_schema), node.elts) for item in sublist]
 
         if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            # need to be able to infer type
+            new_schema.columns[node.attr] = None
             return [ColumnReferenceExpression(name=node.attr)]
 
         raise ValueError(f"Unsupported Column Reference {node.value}")
 
     @staticmethod
-    def _parse_filter(node: ast.AST, schema: Dict[str, Schema], args: [arg]) -> LambdaExpression:
-        return LambdaExpression(list(map(lambda a: a.arg, args)), Parser._parse_lambda_body(node, schema, ParseType.lambda_body))
+    def _parse_filter(node: ast.AST, args: [arg], new_schema: Schema) -> LambdaExpression:
+        return LambdaExpression(list(map(lambda a: a.arg, args)), Parser._parse_lambda_body(node, ParseType.lambda_body, new_schema))
 
     @staticmethod
-    def _parse_extend(node: ast.AST, schema: Dict[str, Schema], args: [arg]) -> List[ComputedColumnAliasExpression]:
+    def _parse_extend(node: ast.AST, args: [arg], new_schema: Schema) -> List[ComputedColumnAliasExpression]:
         if isinstance(node, ast.List):
             new_implicit_aliases = {}
             extends = []
             for elt in node.elts:
-                node_and_new_aliases = Parser._parse_single_extend(elt, schema, args, new_implicit_aliases)
-                print(node_and_new_aliases)
+                node_and_new_aliases = Parser._parse_single_extend(elt, args, new_implicit_aliases, new_schema)
                 new_implicit_aliases.update(node_and_new_aliases[1])
                 extends.append(node_and_new_aliases[0])
             return extends
 
-        return [Parser._parse_single_extend(node, schema, args, {})[0]]
+        return [Parser._parse_single_extend(node, args, {}, new_schema)[0]]
 
     @staticmethod
-    def _parse_single_extend(node: ast.AST, schema: Dict[str, Schema], args: [arg], implicit_aliases: Dict[str, str]) -> Tuple[ComputedColumnAliasExpression, Dict[str, str]]:
+    def _parse_single_extend(node: ast.AST, args: [arg], implicit_aliases: Dict[str, str], new_schema: Schema) -> Tuple[ComputedColumnAliasExpression, Dict[str, str]]:
         if isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name):
-            return (ComputedColumnAliasExpression(node.target.id, LambdaExpression(list(map(lambda a: a.arg, args)), Parser._parse_lambda_body(node.value, schema, args, implicit_aliases))), {node.target.id: args[0].arg})
+            new_schema.columns[node.target.id] = None
+            return (ComputedColumnAliasExpression(node.target.id, LambdaExpression(list(map(lambda a: a.arg, args)), Parser._parse_lambda_body(node.value, args, new_schema, implicit_aliases))), {node.target.id: args[0].arg})
 
         raise ValueError(f"Not a valid extend statement {node.value}")
 
     @staticmethod
-    def _parse_join(node: ast.AST, schema: Dict[str, Schema], args: [arg]) -> List[ColumnReferenceExpression]:
-        print("HELLO")
-        print(ast.dump(node))
-        return LambdaExpression(list(map(lambda a: a.arg, args)), Parser._parse_lambda_body(node, schema, ParseType.lambda_body))
+    def _parse_join(node: ast.AST, args: [arg], new_schema: Schema) -> List[ColumnReferenceExpression]:
+        return LambdaExpression(list(map(lambda a: a.arg, args)), Parser._parse_lambda_body(node, ParseType.lambda_body, new_schema))
 
     @staticmethod
     def _parse_rename(node: ast.AST) -> List[ColumnReferenceExpression]:
-        if isinstance(node, ast.List):
+        if isinstance(node, ast.List) or isinstance(node, ast.Tuple):
             return [item for sublist in map(lambda n: Parser._parse_rename(n), node.elts) for item in sublist]
 
         if isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name) and isinstance(node.value, ast.Attribute):
@@ -178,29 +181,35 @@ class Parser:
         raise ValueError(f"Unsupported Rename {node}")
 
     @staticmethod
-    def _parse_group_by(node: ast.AST, schema: Dict[str, Schema], args: [arg]) -> GroupByExpression:
+    def _parse_group_by(node: ast.AST, args: [arg], new_schema: Schema) -> Tuple[GroupByExpression, Schema]:
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "aggregate":
             if len(node.args) != 2 and len(node.args) != 3:
                 raise ValueError(f"An aggregate function requires 2 or 3 arguments: {node.args}")
-            selections = Parser._parse_select(node.args[0])
-            expressions_and_aliases = list(map(lambda n: Parser._parse_group_by_map_aggregate(n, schema, args), node.args[1].elts if isinstance(node.args[1], ast.List) or isinstance(node.args[1], ast.Tuple) else [node.args[1]]))
+
+            # capture the columns we're going to group by
+            group_by_schema = Schema(new_schema.name, {})
+            selections = Parser._parse_select(node.args[0], group_by_schema)
+
+            expressions_and_aliases = list(map(lambda n: Parser._parse_group_by_map_aggregate(n, args, new_schema, group_by_schema), node.args[1].elts if isinstance(node.args[1], ast.List) or isinstance(node.args[1], ast.Tuple) else [node.args[1]]))
             expressions = list(map(lambda e: e[0], expressions_and_aliases))
             implicit_aliases = list(map(lambda e: e[1], expressions_and_aliases))
-            print("HERE I AM")
-            print(implicit_aliases)
-            having = Parser._parse_lambda_body(node.args[2], schema, args, implicit_aliases) if len(node.args) == 3 else None
+
+            having = Parser._parse_lambda_body(node.args[2], args, group_by_schema, implicit_aliases) if len(node.args) == 3 else None
+            new_schema.columns = group_by_schema.columns
             return GroupByExpression(selections, expressions, having)
 
         raise ValueError(f"Unsupported GroupBy expression {node}")
 
     @staticmethod
-    def _parse_group_by_map_aggregate(node: ast.AST, schema: Dict[str, Schema], args: [arg]) -> Tuple[Expression, dict[str, str]]:
+    def _parse_group_by_map_aggregate(node: ast.AST, args: [arg], full_schema: Schema, target_schema: Schema) -> Tuple[Expression, dict[str, str]]:
         if isinstance(node, ast.NamedExpr):
             computed_column = node.target.id
+            target_schema.columns[computed_column] = None
+            full_schema.columns[computed_column] = None
             # since pure groupBy's map/reduce is really map/apply_function, we need to assume the first node is a Call
             # note that there is only one arg for this lambda
             if isinstance(node.value, ast.Call):
-                map_expression = LambdaExpression(list(map(lambda a: a.arg, args)), Parser._parse_lambda_body(node.value.args[0], schema, args))
+                map_expression = LambdaExpression(list(map(lambda a: a.arg, args)), Parser._parse_lambda_body(node.value.args[0], args, full_schema))
                 # very brittle, lots more checks needed here
                 module = importlib.import_module("functions")
                 class_ = getattr(module, f"{node.value.func.id.title()}Function")
@@ -212,9 +221,9 @@ class Parser:
         raise ValueError(f"Unsupported GroupBy expression {node}")
 
     @staticmethod
-    def _parse_order_by(node: ast.AST, schema: Dict[str, Schema], args: [arg]) -> [OrderByExpression]:
+    def _parse_order_by(node: ast.AST, args: [arg]) -> [OrderByExpression]:
         if isinstance(node, ast.List):
-            return [item for sublist in map(lambda n: Parser._parse_order_by(n, schema, args), node.elts) for item in sublist]
+            return [item for sublist in map(lambda n: Parser._parse_order_by(n, args), node.elts) for item in sublist]
 
         order = AscendingOrderType()
         clause = node
@@ -250,21 +259,22 @@ class Parser:
         raise NotImplementedError()
 
     @staticmethod
-    def _parse_lambda_body(node: ast.AST, schema: Dict[str, Schema], args: [arg], implicit_aliases: dict[str, str] = None) -> Expression:
+    def _parse_lambda_body(node: ast.AST, args: [arg], new_schema: Schema, implicit_aliases: dict[str, str] = None) -> Expression:
         if node is None:
             raise ValueError("node in Parser._parse_expression is None")
 
         if isinstance(node, ast.NamedExpr):
-            return ColumnAliasExpression(node.target.id, Parser._parse_lambda_body(node.value, schema, args, implicit_aliases))
+            new_schema.columns[node.target.id] = None
+            return ColumnAliasExpression(node.target.id, Parser._parse_lambda_body(node.value, args, new_schema, implicit_aliases))
 
         if isinstance(node, ast.Compare):
             # Handle comparison operations (e.g., x > 5, y == 'value')
-            left = Parser._parse_lambda_body(node.left, schema, args, implicit_aliases)
+            left = Parser._parse_lambda_body(node.left, args, new_schema, implicit_aliases)
 
             # We only handle the first comparator for simplicity
             # In a real implementation, we would handle multiple comparators
             op = node.ops[0]
-            right = Parser._parse_lambda_body(node.comparators[0], schema, args, implicit_aliases)
+            right = Parser._parse_lambda_body(node.comparators[0], args, new_schema, implicit_aliases)
 
             comp_op = Parser._get_comparison_operator(op)
 
@@ -278,8 +288,8 @@ class Parser:
 
         elif isinstance(node, ast.BinOp):
             # Handle binary operations (e.g., x + y, x - y, x * y)
-            left = Parser._parse_lambda_body(node.left, schema, args, implicit_aliases)
-            right = Parser._parse_lambda_body(node.right, schema, args, implicit_aliases)
+            left = Parser._parse_lambda_body(node.left, args, new_schema, implicit_aliases)
+            right = Parser._parse_lambda_body(node.right, args, new_schema, implicit_aliases)
 
             comp_op = Parser._get_binary_operator(node.op)
 
@@ -293,7 +303,7 @@ class Parser:
 
         elif isinstance(node, ast.BoolOp):
             # Handle boolean operations (e.g., x and y, x or y)
-            values = [Parser._parse_lambda_body(val, schema, args, implicit_aliases) for val in node.values]
+            values = [Parser._parse_lambda_body(val, args, new_schema, implicit_aliases) for val in node.values]
 
             # Combine the values with the appropriate operator
             comp_op = AndBinaryOperator() if isinstance(node.op, ast.And) else OrBinaryOperator()
@@ -318,15 +328,9 @@ class Parser:
         elif isinstance(node, ast.Attribute):
             # Handle column references (e.g. x.column_name)
             if isinstance(node.value, ast.Name):
-                print(schema)
-                print(node.value.id)
-                print(node.attr)
                 # validate the column name
-                actual_schema = schema[node.value.id]
-                print(actual_schema)
-                print(ast.dump(node.value))
-                if not actual_schema.validate_column(node.attr):
-                    raise ValueError(f"Column '{node.attr}' not found in table schema '{actual_schema}'")
+                if not new_schema.validate_column(node.attr):
+                    raise ValueError(f"Column '{node.attr}' not found in table schema '{new_schema}'")
 
                 return ColumnAliasExpression(alias=node.value.id, reference=ColumnReferenceExpression(name=node.attr))
 
@@ -357,7 +361,7 @@ class Parser:
 
         elif isinstance(node, ast.UnaryOp):
             # Handle unary operations (e.g., not x)
-            operand = Parser._parse_lambda_body(node.operand, schema, args, implicit_aliases)
+            operand = Parser._parse_lambda_body(node.operand, args, new_schema, implicit_aliases)
 
             # Ensure operand is an Expression object, not a list or tuple
             if isinstance(operand, list) or isinstance(operand, tuple):
@@ -369,14 +373,14 @@ class Parser:
             else:
                 # Other unary operations (e.g., +, -)
                 # In a real implementation, we would handle this more robustly
-                return Parser._parse_lambda_body(node.operand, schema, args, implicit_aliases)
+                return Parser._parse_lambda_body(node.operand, args, new_schema, implicit_aliases)
 
         elif isinstance(node, ast.IfExp):
             # Handle conditional expressions (e.g., x if y else z)
             # In a real implementation, we would handle this more robustly
-            test = Parser._parse_lambda_body(node.test, schema, args, implicit_aliases)
-            body = Parser._parse_lambda_body(node.body, schema, args, implicit_aliases)
-            orelse = Parser._parse_lambda_body(node.orelse, schema, args, implicit_aliases)
+            test = Parser._parse_lambda_body(node.test, args, new_schema, implicit_aliases)
+            body = Parser._parse_lambda_body(node.body, args, new_schema, implicit_aliases)
+            orelse = Parser._parse_lambda_body(node.orelse, args, new_schema, implicit_aliases)
 
             # Ensure all values are Expression objects, not lists or tuples
             if isinstance(test, list) or isinstance(test, tuple):
@@ -394,14 +398,14 @@ class Parser:
             # This is used for array returns in lambdas like lambda x: [x.name, x.age]
             elements = []
             for elt in node.elts:
-                elements.append(Parser._parse_lambda_body(elt, schema, args, implicit_aliases))
+                elements.append(Parser._parse_lambda_body(elt, args, new_schema, implicit_aliases))
             return elements
 
         elif isinstance(node, ast.Tuple):
             # Handle Join with rename ( x.col1 == y.col1, [ (x_col1 := x.col1 ), (y_col1 := y.col1 ) ]
             elements = []
             for elt in node.elts:
-                elements.append(Parser._parse_lambda_body(elt, schema, args, implicit_aliases))
+                elements.append(Parser._parse_lambda_body(elt, args, new_schema, implicit_aliases))
             return elements
 
         elif isinstance(node, ast.Call):
@@ -413,13 +417,13 @@ class Parser:
                 # Parse the arguments to the function
 
                 for arg in node.args:
-                    parsed_arg = Parser._parse_lambda_body(arg, schema, args, implicit_aliases)
+                    parsed_arg = Parser._parse_lambda_body(arg, args, new_schema, implicit_aliases)
                     args_list.append(parsed_arg)
 
                 # Handle keyword arguments
                 # kwargs = {}
                 for kw in node.keywords:
-                    parsed_kw = Parser._parse_lambda_body(kw.value, schema, args, implicit_aliases)
+                    parsed_kw = Parser._parse_lambda_body(kw.value, args, new_schema, implicit_aliases)
                     # kwargs[kw.arg] = parsed_kw
                     args_list.append(parsed_kw)
 
@@ -447,12 +451,12 @@ class Parser:
             expr = []
             for value in node.values:
                 if isinstance(value, ast.Constant):
-                    expr.append(Parser._parse_lambda_body(value, schema, args, implicit_aliases))
+                    expr.append(Parser._parse_lambda_body(value, args, new_schema, implicit_aliases))
                 elif isinstance(value, ast.FormattedValue):
                     if value.format_spec is not None:
                         raise ValueError(f"Format Spec Not Supported: {value.format_spec}")
                     else:
-                        expr.append(Parser._parse_lambda_body(value.value, schema, args, implicit_aliases))
+                        expr.append(Parser._parse_lambda_body(value.value, args, new_schema, implicit_aliases))
 
             return FunctionExpression(StringConcatFunction(), expr)
 

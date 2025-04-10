@@ -23,34 +23,39 @@ class LegendQL:
 
     def select(self, columns: Callable) -> LegendQL:
         self.schema.columns.clear()
-        clause = SelectionClause(parser.Parser.parse(columns, [self.schema], ParseType.select))
-        self._clauses.append(clause)
+        expression_and_schema = parser.Parser.parse(columns, [self.schema], ParseType.select)
+        self._clauses.append(SelectionClause(expression_and_schema[0]))
+        self.schema = expression_and_schema[1]
         return self
 
     def extend(self, columns: Callable) -> LegendQL:
-        clause = ExtendClause(parser.Parser.parse(columns, [self.schema], ParseType.extend))
-        self._clauses.append(clause)
+        expression_and_schema = parser.Parser.parse(columns, [self.schema], ParseType.extend)
+        self._clauses.append(ExtendClause(expression_and_schema[0]))
+        self.schema = expression_and_schema[1]
         return self
 
     def rename(self, columns: Callable) -> LegendQL:
-        clause = RenameClause(parser.Parser.parse(columns, [self.schema], ParseType.rename))
-        self._clauses.append(clause)
+        expression_and_schema = parser.Parser.parse(columns, [self.schema], ParseType.rename)
+        self._clauses.append(RenameClause(expression_and_schema[0]))
+        self.schema = expression_and_schema[1]
         return self
 
     def filter(self, condition: Callable) -> LegendQL:
-        clause = FilterClause(parser.Parser.parse(condition, [self.schema], ParseType.filter))
-        self._clauses.append(clause)
+        expression_and_schema = parser.Parser.parse(condition, [self.schema], ParseType.filter)
+        self._clauses.append(FilterClause(expression_and_schema[0]))
+        self.schema = expression_and_schema[1]
         return self
 
     def group_by(self, aggr: Callable) -> LegendQL:
-        self.schema.columns.clear()
-        self._clauses.append(GroupByClause(parser.Parser.parse(aggr, [self.schema], ParseType.group_by)))
+        expression_and_schema = parser.Parser.parse(aggr, [self.schema], ParseType.group_by)
+        self._clauses.append(GroupByClause(expression_and_schema[0]))
+        self.schema = expression_and_schema[1]
         return self
 
     def _join(self, lq: LegendQL, join: Callable, join_type: JoinType) -> LegendQL:
-        self._clauses.append(JoinClause(FromClause(lq.schema.name, lq.schema.name), join_type, parser.Parser.parse(join, [self.schema, lq.schema], ParseType.join)))
-        self.schema.columns.update(lq.schema.columns)
-        self.schema.update_name(lq.schema.name)
+        expression_and_schema = parser.Parser.parse(join, [self.schema, lq.schema], ParseType.join)
+        self._clauses.append(JoinClause(FromClause(lq.schema.name, lq.schema.name), join_type, expression_and_schema[0]))
+        self.schema = expression_and_schema[1]
         return self
 
     def join(self, lq: LegendQL, join: Callable) -> LegendQL:
@@ -60,8 +65,9 @@ class LegendQL:
         return self._join(lq, join, LeftJoinType())
 
     def order_by(self, columns: Callable) -> LegendQL:
-        clause = OrderByClause(parser.Parser.parse(columns, [self.schema], ParseType.order_by))
-        self._clauses.append(clause)
+        expression_and_schema = parser.Parser.parse(columns, [self.schema], ParseType.order_by)
+        self._clauses.append(OrderByClause(expression_and_schema[0]))
+        self.schema = expression_and_schema[1]
         return self
 
     def limit(self, limit: int) -> LegendQL:
