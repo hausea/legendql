@@ -10,6 +10,7 @@ dep = LegendQL.from_("department", columns={ "id": int, "name": str, "city": str
 
 (emp
  .filter(lambda r: r.id > 10)
+ .select(lambda r: [r.salary, r.dept_id])
  .left_join(dep, lambda e, d: (
     e.dept_id == d.id,
     (department_name := d.name, department_id := d.id)))
@@ -20,7 +21,7 @@ dep = LegendQL.from_("department", columns={ "id": int, "name": str, "city": str
     frame=rows(0, unbounded())))])
  .group_by(lambda r: aggregate(
     [ r.id, r.name ],
-    [ sum_salary := sum(r.salary), count_dept := count(r.department_name) ],
+    (sum_salary := sum(r.salary), count_dept := count(r.department_name) ),
     having=sum_salary > 100_000))
  .filter(lambda r: r.id > 100)
  .extend(lambda r: (calc_col := r.id + r.sum_salary))

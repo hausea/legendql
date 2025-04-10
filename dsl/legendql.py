@@ -23,57 +23,34 @@ class LegendQL:
 
     def select(self, columns: Callable) -> LegendQL:
         self.schema.columns.clear()
-        clause = SelectionClause(parser.Parser.parse(columns, self.schema, ParseType.select))
+        clause = SelectionClause(parser.Parser.parse(columns, [self.schema], ParseType.select))
         self._clauses.append(clause)
-        self.schema.update_name()
         return self
 
     def extend(self, columns: Callable) -> LegendQL:
-        clause = ExtendClause(parser.Parser.parse(columns, self.schema, ParseType.extend))
+        clause = ExtendClause(parser.Parser.parse(columns, [self.schema], ParseType.extend))
         self._clauses.append(clause)
-        self.schema.update_name()
         return self
 
     def rename(self, columns: Callable) -> LegendQL:
-        clause = RenameClause(parser.Parser.parse(columns, self.schema, ParseType.rename))
+        clause = RenameClause(parser.Parser.parse(columns, [self.schema], ParseType.rename))
         self._clauses.append(clause)
-        self.schema.update_name()
         return self
 
     def filter(self, condition: Callable) -> LegendQL:
-        clause = FilterClause(parser.Parser.parse(condition, self.schema, ParseType.filter))
+        clause = FilterClause(parser.Parser.parse(condition, [self.schema], ParseType.filter))
         self._clauses.append(clause)
-        self.schema.update_name()
         return self
 
     def group_by(self, aggr: Callable) -> LegendQL:
         self.schema.columns.clear()
-        self._clauses.append(GroupByClause(parser.Parser.parse(aggr, self.schema, ParseType.group_by)))
-        self.schema.update_name()
+        self._clauses.append(GroupByClause(parser.Parser.parse(aggr, [self.schema], ParseType.group_by)))
         return self
 
     def _join(self, lq: LegendQL, join: Callable, join_type: JoinType) -> LegendQL:
-
-        expr = parser.Parser.parse_join(join, self.schema, lq.schema)
-
-        if isinstance(expr, Expression):
-            clause = JoinClause(from_clause=FromClause(lq.schema.name, lq.schema.name), join_type=join_type, on_clause=JoinExpression(expr))
-            self._clauses.append(clause)
-        elif isinstance(expr, List) and len(expr) == 2:
-            clause = RenameClause([expr[1]])
-            self._clauses.append(clause)
-
-            clause = JoinClause(from_clause=FromClause(lq.schema.name, lq.schema.name), join_type=join_type, on_clause=JoinExpression(expr[0]))
-            self._clauses.append(clause)
-        else:
-            raise ValueError(f"Badly formed Join: {join} {expr}")
-
-        if any(key in lq.schema.columns for key in self.schema.columns):
-            raise ValueError(f"you have not renamed all the overlapping columns: {lq.schema.columns}, {self.schema.columns}")
-
+        self._clauses.append(JoinClause(FromClause(lq.schema.name, lq.schema.name), join_type, parser.Parser.parse(join, [self.schema, lq.schema], ParseType.join)))
         self.schema.columns.update(lq.schema.columns)
-        self.schema.update_name()
-
+        self.schema.update_name(lq.schema.name)
         return self
 
     def join(self, lq: LegendQL, join: Callable) -> LegendQL:
@@ -83,7 +60,7 @@ class LegendQL:
         return self._join(lq, join, LeftJoinType())
 
     def order_by(self, columns: Callable) -> LegendQL:
-        clause = OrderByClause(parser.Parser.parse(columns, self.schema, ParseType.order_by))
+        clause = OrderByClause(parser.Parser.parse(columns, [self.schema], ParseType.order_by))
         self._clauses.append(clause)
         return self
 
