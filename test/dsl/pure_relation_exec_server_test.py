@@ -3,7 +3,6 @@ import unittest
 
 from model.schema import Schema
 from ql.legendql import LegendQL
-from ql.rawlegendql import RawLegendQL
 from runtime.pure.db.duckdb import DuckDBDatabaseType
 from runtime.pure.executionserver.runtime import ExecutionServerRuntime
 

@@ -48,7 +48,7 @@ class TestDslToPureRelationDialect(unittest.TestCase):
                       .bind(runtime))
         pure_relation = data_frame.executable_to_string()
         self.assertEqual(
-            "#>{local::DuckDuckDatabase.table}#->select(~[column, column2])->groupBy(~[column, column2], ~[count:a | $a.column+$a.column2 : a | $a->count(), avg:a | $a.column : a | $a->avg()])->from(local::DuckDuckRuntime)",
+            "#>{local::DuckDuckDatabase.table}#->select(~[id, departmentId, first, last])->groupBy(~[last], ~[sum_of_id:r | $r.id+1 : a | $a->sum(), r | $r.sum_of_id > 0])->from(local::DuckDuckRuntime)",
             pure_relation)
 
     def test_simple_select_with_limit(self):
