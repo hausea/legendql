@@ -5,11 +5,19 @@ from model.schema import Table, Database
 from ql.rawlegendql import RawLegendQL
 from runtime.pure.db.duckdb import DuckDBDatabaseType
 from runtime.pure.executionserver.runtime import ExecutionServerRuntime
+from test.executionserver.testutils import TestExecutionServer
 
 
 class TestExecutionServerEvaluation(unittest.TestCase):
-    def setUp(self):
-        pass
+
+    @classmethod
+    def setUpClass(cls):
+        cls.execution_server = TestExecutionServer("../executionserver")
+        cls.execution_server.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.execution_server.stop()
 
     def test_execution_against_execution_server(self):
         table = Table("employees", {"id": int, "departmentId": int, "first": str, "last": str})

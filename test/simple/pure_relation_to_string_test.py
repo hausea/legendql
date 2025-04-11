@@ -177,7 +177,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_conditional(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "columnA": int, "columnB": int})
+        table = Table("table", {"id": int, "columnA": int, "columnB": int})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .extend([ComputedColumnAliasExpression("conditional", LambdaExpression(["a"], IfExpression(test=BinaryExpression(left=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("columnA"))), right=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("columnB"))), operator=GreaterThanBinaryOperator()), body=ColumnAliasExpression("a", ColumnReferenceExpression("columnA")), orelse=ColumnAliasExpression("a", ColumnReferenceExpression("columnB")))))])
                       .bind(runtime))
         pure_relation = data_frame.executable_to_string()
@@ -187,7 +189,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_date(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "columnA": int, "columnB": int})
+        table = Table("table", {"id": int, "columnA": int, "columnB": int})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .extend([
                         ComputedColumnAliasExpression("dateGreater", LambdaExpression(parameters=["a"], expression=BinaryExpression(left=OperandExpression(LiteralExpression(literal=DateLiteral(datetime(2025, 4, 11)))), right=OperandExpression(LiteralExpression(literal=DateLiteral(datetime(2025, 4, 12)))), operator=GreaterThanBinaryOperator()))),
                         ComputedColumnAliasExpression("dateTimeGreater", LambdaExpression(parameters=["a"], expression=BinaryExpression(left=OperandExpression(LiteralExpression(literal=DateLiteral(datetime(2025, 4, 11, 10, 0, 0)))), right=OperandExpression(LiteralExpression(literal=DateLiteral(datetime(2025, 4, 12, 10, 0, 0)))), operator=GreaterThanBinaryOperator()))),
@@ -200,7 +204,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_modulo_and_exponent(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "columnA": int})
+        table = Table("table", {"id": int, "columnA": int, "columnB": int})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .extend([
                         ComputedColumnAliasExpression("modulo", LambdaExpression(["a"], FunctionExpression(parameters=[ColumnAliasExpression("a", ColumnReferenceExpression("column")), LiteralExpression(literal=IntegerLiteral(2))], function=ModuloFunction()))),
                         ComputedColumnAliasExpression("exponent", LambdaExpression(["a"], FunctionExpression(parameters=[ColumnAliasExpression("a", ColumnReferenceExpression("column")), LiteralExpression(literal=IntegerLiteral(2))], function=ExponentFunction())))

@@ -10,3 +10,12 @@ You can run the relational runtime by executing: `java -jar legend-engine-repl-r
 Place the downloaded jar in the root directory of this project.
 
 You should now be able to run tests that rely on the repl.
+
+## Legend Execution Server
+You can download the http server jar of the legend execution server [here](https://repo1.maven.org/maven2/org/finos/legend/engine/legend-engine-server-http-server/4.78.3/legend-engine-server-http-server-4.78.3-shaded.jar)
+
+From the root directory of this project, you can run the execution server by executing: `java -jar test/executionserver/legend-engine-server-http-server-4.78.3-shaded.jar server test/executionserver/userTestConfig.json`
+
+Place the downloaded jar in test/executionserver
+
+You should now be able to run tests that rely on the execution server
