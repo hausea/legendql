@@ -26,7 +26,7 @@ class TestReplEvaluation(unittest.TestCase):
         data_frame = (LegendQL.from_table(database, table)
                       .select(lambda r: [r.id, r.departmentId, r.first, r.last])
                       .bind(runtime))
-        results = data_frame.eval()
+        results = data_frame.eval().data()
         self.assertEqual("""> +--------+--------------+------------+------------+
 |   id   | departmentId |   first    |    last    |
 | BIGINT |    BIGINT    | VARCHAR(0) | VARCHAR(0) |

@@ -1,5 +1,3 @@
-import json
-
 from model.schema import Table, Database
 from ql.legendql import LegendQL
 from runtime.pure.db.duckdb import DuckDBDatabaseType
@@ -22,5 +20,11 @@ class TestExecutionServerEvaluation(ExecutionServerTest):
                       .select(lambda r: [r.id, r.departmentId, r.first, r.last])
                       .bind(runtime))
 
-        result = data_frame.eval()
-        print(json.dumps(result, indent=4))
+        result = data_frame.eval().data()
+
+        self.assertEqual(result.relation, "#>{local::DuckDuckDatabase.employees}#->select(~[id, departmentId, first, last])->from(local::DuckDuckRuntime)")
+        self.assertEqual(result.sql, 'select "employees_0".id as "id", "employees_0".departmentId as "departmentId", "employees_0".first as "first", "employees_0".last as "last" from employees as "employees_0"')
+        self.assertEqual(",".join(result.header), "id,departmentId,first,last")
+        self.assertEqual(len(result.rows), 2)
+        self.assertEqual(",".join(map(lambda r: str(r), result.rows[0])), "1,1, John, Doe")
+        self.assertEqual(",".join(map(lambda r: str(r), result.rows[1])), "2,1, Jane, Doe")

@@ -29,7 +29,7 @@ class TestReplEvaluation(unittest.TestCase):
         data_frame = (RawLegendQL.from_table(database, table)
                       .select("id", "departmentId", "first", "last")
                       .bind(runtime))
-        results = data_frame.eval()
+        results = data_frame.eval().data()
         self.assertEqual("""> +--------+--------------+------------+------------+
 |   id   | departmentId |   first    |    last    |
 | BIGINT |    BIGINT    | VARCHAR(0) | VARCHAR(0) |
@@ -56,7 +56,7 @@ class TestReplEvaluation(unittest.TestCase):
                       .join("local::DuckDuckDatabase", "departments", InnerJoinType(), LambdaExpression(["a", "b"], BinaryExpression(OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("newCol"))), OperandExpression(ColumnAliasExpression("b", ColumnReferenceExpression("id"))), EqualsBinaryOperator())))
                       .select("id")
                       .bind(runtime))
-        results = data_frame.eval()
+        results = data_frame.eval().data()
         self.assertEqual("""> +--------+
 |   id   |
 | BIGINT |

@@ -435,12 +435,17 @@ class Runtime(ABC):
         return visitor.visit_runtime(self, parameter)
 
 @dataclass
-class DataFrame(ABC):
+class DataFrame[T](ABC):
     runtime: Runtime
     clauses: List[Clause]
+    results: T = None
 
-    def eval[T](self) -> T:
-        return self.runtime.eval(self.clauses)
+    def eval(self) -> DataFrame:
+        self.results = self.runtime.eval(self.clauses)
+        return self
+
+    def data(self):
+        return self.results
 
     def executable_to_string(self) -> str:
         return self.runtime.executable_to_string(self.clauses)
