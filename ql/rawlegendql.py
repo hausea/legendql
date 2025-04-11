@@ -6,21 +6,22 @@ from model.metamodel import SelectionClause, Runtime, DataFrame, FilterClause, E
     LimitClause, JoinClause, JoinType, JoinExpression, Clause, FromClause, Expression, IntegerLiteral, \
     GroupByExpression, ColumnReferenceExpression, RenameClause, ColumnAliasExpression, OffsetClause, OrderByExpression, \
     OrderByClause
-from model.schema import Schema
+from model.schema import Table, Database
 
 
 @dataclass
 class RawLegendQL:
-    _schema: Schema
+    _database: Database
+    _table: Table
     _clauses: List[Clause]
 
     @classmethod
-    def from_schema(cls, schema: Schema) -> RawLegendQL:
-        return RawLegendQL(schema, [FromClause(schema.database, schema.table)])
+    def from_table(cls, database: Database, table: Table) -> RawLegendQL:
+        return RawLegendQL(database, Table(table.table, table.columns.copy()), [FromClause(database.name, table.table)])
 
     @classmethod
-    def from_db(cls, database: str, table: str, columns: Dict[str, Type]) -> RawLegendQL:
-        return RawLegendQL.from_schema(Schema(database, table, columns))
+    def from_db(cls, database: Database, table: str, columns: Dict[str, Type]) -> RawLegendQL:
+        return RawLegendQL.from_table(database, Table(table, columns))
 
     def bind[R: Runtime](self, runtime: R) -> DataFrame:
         return DataFrame(runtime, self._clauses)
@@ -31,8 +32,8 @@ class RawLegendQL:
     def _add_clause(self, clause: Clause) -> None:
         self._clauses.append(clause)
 
-    def _update_schema(self, schema: Schema) -> None:
-        self._schema = schema
+    def _update_table(self, table: Table) -> None:
+        self._table = table
 
     def select(self, *names: str) -> RawLegendQL:
         self._add_clause(SelectionClause(list(map(lambda name: ColumnReferenceExpression(name), names))))

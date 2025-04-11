@@ -2,14 +2,14 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Type
 
-from model.schema import Schema
+from model.schema import Table, Database
 from runtime.pure.executionserver.runtime import DatabaseType
 
 @dataclass
 class DuckDBDatabaseType(DatabaseType):
     path: str
 
-    def generate_pure_runtime(self, name: str) -> str:
+    def generate_pure_runtime(self, name: str, database: Database) -> str:
         return f"""
 ###Runtime
 Runtime {name}
@@ -19,7 +19,7 @@ Runtime {name}
   ];
   connections:
   [
-    local::DuckDuckDatabase:
+    {database.name}:
     [
       connection: local::DuckDuckConnection
     ]
@@ -41,21 +41,25 @@ RelationalDatabaseConnection local::DuckDuckConnection
 }}    
 """
 
-    def generate_pure_database(self, schema: Schema) -> str:
+    def generate_pure_database(self, database: Database) -> str:
         columns = []
-        for (col, typ) in schema.columns.items():
-            columns.append(f"{col} {self._python_type_to_db_type(typ)}")
-        table = f"""
-  Table {schema.table}
+        tables = ""
+        for table in database.tables:
+
+            for (col, typ) in table.columns.items():
+                columns.append(f"{col} {self._python_type_to_db_type(typ)}")
+            tables += f"""
+  Table {table.table}
   (
     {",\n".join(columns)}
   )
+  
 """
         return f"""
 ###Relational
-Database {schema.database}
+Database {database.name}
 (
-  {table}
+  {tables}
 )
 """
 

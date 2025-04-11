@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from model.schema import Schema
+from model.schema import Table, Database
 from ql.rawlegendql import RawLegendQL
 from runtime.pure.db.duckdb import DuckDBDatabaseType
 from runtime.pure.executionserver.runtime import ExecutionServerRuntime
@@ -12,10 +12,11 @@ class TestExecutionServerEvaluation(unittest.TestCase):
         pass
 
     def test_execution_against_execution_server(self):
-        schema = Schema("local::DuckDuckDatabase", "employees", {"id": int, "departmentId": int, "first": str, "last": str})
-        runtime = ExecutionServerRuntime("local::DuckDuckRuntime", DuckDBDatabaseType("/Users/ahauser/.legend/repl/duck"), "http://localhost:6300", [schema])
+        table = Table("employees", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        runtime = ExecutionServerRuntime("local::DuckDuckRuntime", DuckDBDatabaseType("/Users/ahauser/.legend/repl/duck"), "http://localhost:6300", database)
 
-        data_frame = (RawLegendQL.from_schema(schema)
+        data_frame = (RawLegendQL.from_table(database, table)
                       .select("id", "departmentId", "first", "last")
                       .bind(runtime))
 

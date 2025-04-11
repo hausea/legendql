@@ -2,6 +2,7 @@ import unittest
 
 from dialect.purerelation.dialect import NonExecutablePureRuntime
 from dsl.functions import aggregate
+from model.schema import Table, Database
 from ql.legendql import LegendQL
 
 
@@ -12,7 +13,9 @@ class TestDslToPureRelationDialect(unittest.TestCase):
 
     def test_simple_select(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (LegendQL.from_table(database, table)
                       .select(lambda e: [e.id, e.departmentId])
                       .bind(runtime))
         pure_relation = data_frame.executable_to_string()
@@ -20,7 +23,9 @@ class TestDslToPureRelationDialect(unittest.TestCase):
 
     def test_simple_select_with_filter(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (LegendQL.from_table(database, table)
                       .select(lambda e: [e.id, e.departmentId])
                       .filter(lambda e: e.id == 1)
                       .bind(runtime))
@@ -29,7 +34,9 @@ class TestDslToPureRelationDialect(unittest.TestCase):
 
     def test_simple_select_with_extend(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (LegendQL.from_table(database, table)
                       .select(lambda e: [e.id, e.departmentId])
                       .extend(lambda e: [new_col := e.id + 1])
                       .bind(runtime))
@@ -39,7 +46,9 @@ class TestDslToPureRelationDialect(unittest.TestCase):
     @unittest.skip("need to support to-string for functions and clean up function metamodel")
     def test_simple_select_with_groupBy(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (LegendQL.from_table(database, table)
                       .select(lambda e: [e.id, e.departmentId, e.first, e.last])
                       .group_by(lambda r: aggregate(
                                             [r.last],
@@ -53,7 +62,9 @@ class TestDslToPureRelationDialect(unittest.TestCase):
 
     def test_simple_select_with_limit(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (LegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (LegendQL.from_table(database, table)
                       .select(lambda e: [e.id, e.departmentId])
                       .limit(1)
                       .bind(runtime))

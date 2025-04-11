@@ -4,9 +4,11 @@ from ql.legendql import *
 '''
     Example DSL with Join using Fluent-style API
 '''
-
-emp = LegendQL.from_db("employees", "employees", columns={"id": int, "name": str, "dept_id": str, "salary": float, "title": str})
-dep = LegendQL.from_db("department", "department", columns={"id": int, "name": str, "city": str, "code": str, "location": str})
+emp_table = Table("employees", {"id": int, "name": str, "dept_id": str, "salary": float, "title": str})
+dep_table = Table("department", {"id": int, "name": str, "city": str, "code": str, "location": str})
+database = Database("db", [emp_table, dep_table])
+emp = LegendQL.from_table(database, emp_table)
+dep = LegendQL.from_table(database, dep_table)
 
 (emp
  .filter(lambda r: r.id > 10)
@@ -34,8 +36,11 @@ for clause in emp._internal._clauses:
     PRQL example from https://prql-lang.org/book/index.html
     Using reassignment for each expression
 '''
+emp_table = Table("employees", {"id": int, "name": str, "title": str, "country": str, "dept_id": str, "salary": float, "start_date": str, "benefits": str})
+database = Database("db", [emp_table, dep_table])
+emp = LegendQL.from_table(database, emp_table)
 
-lq = LegendQL.from_db("employees", "employees", columns={"id": int, "name": str, "title": str, "country": str, "dept_id": str, "salary": float, "start_date": str, "benefits": str})
+lq = LegendQL.from_table(database, emp_table)
 lq = lq.filter(lambda e: e.start_date > '2021-01-01')
 lq = lq.extend(lambda e: [
         (gross_salary := e.salary + 10),
@@ -57,7 +62,11 @@ for clause in lq._internal._clauses:
     Same PRQL example using Fluent API, spacing and line breaks are important
 '''
 
-lq = (LegendQL.from_db("employees", "employees", columns={"id": int, "name": str, "title": str, "country": str, "dept_id": str, "salary": float, "start_date": str, "benefits": float})
+emp_table = Table("employees", {"id": int, "name": str, "title": str, "country": str, "dept_id": str, "salary": float, "start_date": str, "benefits": str})
+database = Database("db", [emp_table, dep_table])
+emp = LegendQL.from_table(database, emp_table)
+
+lq = (LegendQL.from_table(database, emp_table)
  .filter(lambda e: e.start_date > '2021-01-01')
  .extend(lambda e: [
     (gross_salary := e.salary + 10),
@@ -80,8 +89,12 @@ for clause in lq._internal._clauses:
 '''
     Example Window as an expression
 '''
+emp_table = Table("employees", {"id": int, "name": str, "dept_id": str, "salary": float, "location": str})
+database = Database("db", [emp_table, dep_table])
+emp = LegendQL.from_table(database, emp_table)
+
 emp = (
-LegendQL.from_db("employees", "employees", columns={"id": int, "name": str, "dept_id": str, "salary": float, "location": str})
+LegendQL.from_table(database, emp_table)
  .extend(lambda r: (
     avg_val := over(
         r.location,
@@ -94,42 +107,61 @@ LegendQL.from_db("employees", "employees", columns={"id": int, "name": str, "dep
 for clause in emp._internal._clauses:
     print(clause)
 
+emp_table = Table("employees", {"id": int, "name": str, "dept_id": str, "salary": float, "location": str})
+database = Database("db", [emp_table, dep_table])
+emp = LegendQL.from_table(database, emp_table)
+
 emp = (
-LegendQL.from_db("employees", "employees", columns={"id": int, "name": str, "dept_id": str, "salary": float, "location": str})
+LegendQL.from_table(database, emp_table)
  .extend(lambda r: (avg_val := over(r.location, avg(r.salary))))
  )
 
 for clause in emp._internal._clauses:
     print(clause)
 
+emp_table = Table("employees", {"id": int, "name": str, "title": str, "dept_id": str, "salary": float})
+database = Database("db", [emp_table, dep_table])
+emp = LegendQL.from_table(database, emp_table)
+
 emp = (
-LegendQL.from_db("employees", "employees", columns={"id": int, "name": str, "title": str, "dept_id": str, "salary": float})
+LegendQL.from_table(database, emp_table)
  .group_by(lambda r: aggregate(r.title, avg_salary := avg(r.salary)))
  )
 
 for clause in emp._internal._clauses:
     print(clause)
 
+emp_table = Table("employees", {"id": int, "name": str, "title": str, "dept_id": str, "salary": float})
+database = Database("db", [emp_table, dep_table])
+emp = LegendQL.from_table(database, emp_table)
+
 emp = (
-LegendQL.from_db("employees", "employees", columns={"id": int, "name": str, "dept_id": str, "salary": float})
+LegendQL.from_table(database, emp_table)
  .group_by(lambda r: aggregate([r.title, r.dept_id], avg_salary := avg(r.salary)))
  )
 
 for clause in emp._internal._clauses:
     print(clause)
 
+emp_table = Table("employees", {"id": int, "name": str, "title": str, "dept_id": str, "salary": float})
+database = Database("db", [emp_table, dep_table])
+emp = LegendQL.from_table(database, emp_table)
+
 emp = (
-LegendQL.from_db("employees", "employees", columns={"id": int, "name": str, "dept_id": str, "salary": float})
+LegendQL.from_table(database, emp_table)
  .group_by(lambda r: aggregate(r.title, avg_salary := avg(r.salary), having=avg_salary > 100_000))
  )
 
 for clause in emp._internal._clauses:
     print(clause)
 
-
-emp = LegendQL.from_db("employees", "employees", columns={"id": int, "name": str, "dept_id": str, "salary": float})
-dep = LegendQL.from_db("department", "department", columns={"id": int, "name": str, "city": str, "code": str})
-loc = LegendQL.from_db("location", "location", columns={"id": int, "name": str, "country": str, "code": str})
+emp_table = Table("employees", {"id": int, "name": str, "dept_id": str, "salary": float, "title": str})
+dep_table = Table("department", {"id": int, "name": str, "city": str, "code": str, "location": str})
+loc_table = Table("location", {"id": int, "name": str, "country": str, "code": str})
+database = Database("db", [emp_table, dep_table, loc_table])
+emp = LegendQL.from_table(database, emp_table)
+dep = LegendQL.from_table(database, dep_table)
+loc = LegendQL.from_table(database, loc_table)
 
 (emp
  .left_join(dep, lambda e, d: (e.dept_id == d.id, (new_dept_id := d.id, new_dept_name := d.name)))
@@ -138,10 +170,13 @@ loc = LegendQL.from_db("location", "location", columns={"id": int, "name": str, 
 for clause in emp._internal._clauses:
     print(clause)
 
-
-emp = LegendQL.from_db("employees", "employees", columns={"id": int, "name": str, "dept_id": str, "salary": float})
-dep = LegendQL.from_db("department", "department", columns={"id": int, "name": str, "city": str, "code": str})
-loc = LegendQL.from_db("location", "location", columns={"id": int, "name": str, "country": str, "code": str})
+emp_table = Table("employees", {"id": int, "name": str, "dept_id": str, "salary": float})
+dep_table = Table("department", {"id": int, "name": str, "city": str, "code": str})
+loc_table = Table("location", {"id": int, "name": str, "country": str, "code": str})
+database = Database("db", [emp_table, dep_table, loc_table])
+emp = LegendQL.from_table(database, emp_table)
+dep = LegendQL.from_table(database, dep_table)
+loc = LegendQL.from_table(database, loc_table)
 
 (emp
  .left_join(dep, lambda e, d: (e.dept_id == d.id, [(new_dept_id := d.id), (new_dept_name := d.name)]))
@@ -150,44 +185,58 @@ loc = LegendQL.from_db("location", "location", columns={"id": int, "name": str, 
 for clause in emp._internal._clauses:
     print(clause)
 
-dep = LegendQL.from_db("department", "department", columns={"id": int, "name": str, "city": str, "code": str})
+dep_table = Table("department", {"id": int, "name": str, "city": str, "code": str})
+database = Database("db", [dep_table])
+
+dep = LegendQL.from_table(database, dep_table)
 dep.extend(lambda e: (id_plus_one := e.id + 1))
 
-print(dep._internal._schema.columns)
+print(dep._internal._table.columns)
 
 for clause in dep._internal._clauses:
     print(clause)
 
+emp_table = Table("employees", {"id": int, "name": str, "dept_id": str, "salary": float})
+dep_table = Table("department", {"id": int, "name": str, "city": str, "code": str})
+database = Database("db", [emp_table, dep_table])
+emp = LegendQL.from_table(database, emp_table)
+dep = LegendQL.from_table(database, dep_table)
 
-emp = LegendQL.from_db("employees", "employees", columns={"id": int, "name": str, "dept_id": str, "salary": float})
-dep = LegendQL.from_db("department", "department", columns={"id": int, "name": str, "city": str, "code": str})
 emp.left_join(dep, lambda e, d: (e.dept_id == d.id, [(new_dept_id := d.id), (new_dept_name := d.name)]))
 
-print(emp._internal._schema.columns)
+print(emp._internal._table.columns)
 
+dep_table = Table("department", {"id": int, "name": str, "city": str, "code": str})
+database = Database("db", [dep_table])
+dep = LegendQL.from_table(database, dep_table)
 
-dep = LegendQL.from_db("department", "department", columns={"id": int, "name": str, "city": str, "code": str})
 dep.rename(lambda d: (new_dept_id := d.id, new_dept_name := d.name))
 
-print(dep._internal._schema.columns)
+print(dep._internal._table.columns)
 
 for clause in dep._internal._clauses:
     print(clause)
 
 
-dep = LegendQL.from_db("department", "department", columns={"id": int, "name": str, "city": str, "code": str})
+dep_table = Table("department", {"id": int, "name": str, "city": str, "code": str})
+database = Database("db", [dep_table])
+dep = LegendQL.from_table(database, dep_table)
+
 dep.select(lambda d: [d.id, d.name])
 
-print(dep._internal._schema.columns)
+print(dep._internal._table.columns)
 
 for clause in dep._internal._clauses:
     print(clause)
 
 
-dep = LegendQL.from_db("department", "department", columns={"id": int, "name": str, "city": str, "code": str})
+dep_table = Table("department", {"id": int, "name": str, "city": str, "code": str})
+database = Database("db", [dep_table])
+dep = LegendQL.from_table(database, dep_table)
+
 dep.group_by(lambda d: aggregate([d.id, d.name], (sum_test := sum(d.code), count_test := count(d.city))))
 
-print(dep._internal._schema.columns)
+print(dep._internal._table.columns)
 
 for clause in dep._internal._clauses:
     print(clause)

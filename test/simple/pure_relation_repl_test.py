@@ -4,6 +4,7 @@ from model.metamodel import BinaryExpression, OperandExpression, ColumnAliasExpr
     IntegerLiteral, EqualsBinaryOperator, \
     FunctionExpression, CountFunction, InnerJoinType, ColumnReferenceExpression, ComputedColumnAliasExpression, \
     MapReduceExpression, LambdaExpression, VariableAliasExpression
+from model.schema import Database, Table
 from ql.rawlegendql import RawLegendQL
 from runtime.pure.repl.repl_utils import is_repl_running, send_to_repl, load_csv_to_repl
 from runtime.pure.repl.runtime import ReplRuntime
@@ -23,7 +24,9 @@ class TestReplEvaluation(unittest.TestCase):
 
     def test_simple_select(self):
         runtime = ReplRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "employees", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("employees", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .select("id", "departmentId", "first", "last")
                       .bind(runtime))
         results = data_frame.eval()
@@ -38,7 +41,9 @@ class TestReplEvaluation(unittest.TestCase):
 
     def test_complex_query(self):
         runtime = ReplRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "employees", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("employees", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .filter(LambdaExpression(["r"], BinaryExpression(OperandExpression(ColumnAliasExpression("r", ColumnReferenceExpression("departmentId"))), OperandExpression(LiteralExpression(IntegerLiteral(1))), EqualsBinaryOperator())))
                       .select("departmentId")
                       .extend([ComputedColumnAliasExpression("newCol", LambdaExpression(["x"], ColumnAliasExpression("x", ColumnReferenceExpression("departmentId"))))])

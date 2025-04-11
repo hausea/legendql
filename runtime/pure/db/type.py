@@ -1,15 +1,15 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-from model.schema import Schema
+from model.schema import Table, Database
 
 
 class DatabaseType(ABC):
-    def generate_model(self, runtime: str, schemas: List[Schema]):
-        return f"{self.generate_pure_runtime(runtime)}\n\n{self.generate_pure_connection()}\n\n{"\n".join(map(lambda s: self.generate_pure_database(s), schemas))}"
+    def generate_model(self, runtime: str, database: Database) -> str:
+        return f"{self.generate_pure_runtime(runtime, database)}\n\n{self.generate_pure_connection()}\n\n{self.generate_pure_database(database)}"
 
     @abstractmethod
-    def generate_pure_runtime(self, name: str) -> str:
+    def generate_pure_runtime(self, name: str, database: Database) -> str:
         pass
 
     @abstractmethod
@@ -17,5 +17,5 @@ class DatabaseType(ABC):
         pass
 
     @abstractmethod
-    def generate_pure_database(self, schema: Schema) -> str:
+    def generate_pure_database(self, database: Database) -> str:
         pass

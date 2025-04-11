@@ -7,6 +7,7 @@ from model.metamodel import IntegerLiteral, InnerJoinType, BinaryExpression, Col
     ColumnReferenceExpression, ComputedColumnAliasExpression, MapReduceExpression, LambdaExpression, \
     VariableAliasExpression, \
     AverageFunction, OrderByExpression, AscendingOrderType, DescendingOrderType
+from model.schema import Database, Table
 from ql.rawlegendql import RawLegendQL
 
 
@@ -17,7 +18,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_simple_select(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .select("column")
                       .bind(runtime))
         pure_relation = data_frame.executable_to_string()
@@ -25,7 +28,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_simple_select_with_filter(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .select("column")
                       .filter(LambdaExpression(["a"], BinaryExpression(OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), OperandExpression(LiteralExpression(IntegerLiteral(1))), EqualsBinaryOperator())))
                       .bind(runtime))
@@ -34,7 +39,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_simple_select_with_extend(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .select("column")
                       .extend([ComputedColumnAliasExpression("a", LambdaExpression(["a"], ColumnAliasExpression("a", ColumnReferenceExpression("column"))))])
                       .bind(runtime))
@@ -43,7 +50,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_simple_select_with_groupBy(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .select("column", "column2")
                       .group_by([ColumnReferenceExpression("column"), ColumnReferenceExpression("column2")],
                    [ComputedColumnAliasExpression("count",
@@ -63,7 +72,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_simple_select_with_limit(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .select("column")
                       .limit(10)
                       .bind(runtime))
@@ -72,7 +83,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_simple_select_with_join(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .select("column")
                       .join("local::DuckDuckDatabase", "table2", InnerJoinType(), LambdaExpression(["a", "b"], BinaryExpression(OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), OperandExpression(ColumnAliasExpression("b", ColumnReferenceExpression("column"))), EqualsBinaryOperator())))
                       .select("column2")
@@ -82,7 +95,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_multiple_extends(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .extend([ComputedColumnAliasExpression("a", LambdaExpression(["a"], ColumnAliasExpression("a", ColumnReferenceExpression("column")))), ComputedColumnAliasExpression("b", LambdaExpression(["b"], ColumnAliasExpression("b", ColumnReferenceExpression("column"))))])
                       .bind(runtime))
         pure_relation = data_frame.executable_to_string()
@@ -92,7 +107,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_math_binary_operators(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .extend([
                                   ComputedColumnAliasExpression("add", LambdaExpression(["a"], BinaryExpression(left=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), right=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), operator=AddBinaryOperator()))),
                                   ComputedColumnAliasExpression("subtract", LambdaExpression(["a"], BinaryExpression(left=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), right=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("column"))), operator=SubtractBinaryOperator()))),
@@ -107,7 +124,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_single_rename(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .rename(('column', 'newColumn'))
                       .bind(runtime))
         pure_relation = data_frame.executable_to_string()
@@ -117,7 +136,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_multiple_renames(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .rename(('columnA', 'newColumnA'), ('columnB', 'newColumnB'))
                       .bind(runtime))
         pure_relation = data_frame.executable_to_string()
@@ -127,7 +148,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_offset(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .offset(5)
                       .bind(runtime))
         pure_relation = data_frame.executable_to_string()
@@ -137,7 +160,9 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
 
     def test_order_by(self):
         runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
-        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "departmentId": int, "first": str, "last": str})
+        table = Table("table", {"id": int, "departmentId": int, "first": str, "last": str})
+        database = Database("local::DuckDuckDatabase", [table])
+        data_frame = (RawLegendQL.from_table(database, table)
                       .order_by(
                 OrderByExpression(direction=AscendingOrderType(), expression=ColumnReferenceExpression(name="columnA")),
                          OrderByExpression(direction=DescendingOrderType(), expression=ColumnReferenceExpression(name="columnB")))

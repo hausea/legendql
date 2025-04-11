@@ -5,7 +5,7 @@ import requests
 
 from dialect.purerelation.dialect import PureRuntime
 from model.metamodel import Clause
-from model.schema import Schema
+from model.schema import Table, Database
 from runtime.pure.db.type import DatabaseType
 
 
@@ -13,7 +13,7 @@ from runtime.pure.db.type import DatabaseType
 class ExecutionServerRuntime(PureRuntime):
     database_type: DatabaseType
     host: str
-    schemas: List[Schema]
+    database: Database
 
     def eval(self, clauses: List[Clause]) -> dict:
         lam = self.executable_to_string(clauses)
@@ -35,4 +35,4 @@ class ExecutionServerRuntime(PureRuntime):
         return requests.post(self.host + "/api/pure/v1/execution/execute?serializationFormat=DEFAULT", json=input).json()
 
     def _generate_model(self) -> str:
-        return self.database_type.generate_model(self.name, self.schemas)
+        return self.database_type.generate_model(self.name, self.database)
