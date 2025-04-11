@@ -45,7 +45,6 @@ RelationalDatabaseConnection local::DuckDuckConnection
         columns = []
         tables = ""
         for table in database.tables:
-
             for (col, typ) in table.columns.items():
                 columns.append(f"{col} {self._python_type_to_db_type(typ)}")
             tables += f"""
