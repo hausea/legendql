@@ -1,4 +1,3 @@
-import os
 import subprocess
 import threading
 import queue
@@ -22,12 +21,9 @@ class TestExecutionServer:
         cmd = "java -jar " + self.path + "/legend-engine-server-http-server-4.78.3-shaded.jar server " + self.path + "/userTestConfig.json"
 
         self.process = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
-        print(os.getcwd())
-        print(self.process)
         def wait_for_running():
             while self.process.poll() is None:
                 line = self.process.stdout.readline()
-                print(line)
                 if line:
                     if "URL_FACTORY_REGISTERED" in line:
                         ## need to better read logs to determine if it has started
