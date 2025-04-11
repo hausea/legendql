@@ -12,12 +12,14 @@ from model.schema import Table, Database
 @dataclass
 class RawLegendQL:
     _database: Database
+    _table_history: []
     _table: Table
     _clauses: List[Clause]
 
     @classmethod
     def from_table(cls, database: Database, table: Table) -> RawLegendQL:
-        return RawLegendQL(database, Table(table.table, table.columns.copy()), [FromClause(database.name, table.table)])
+        table = Table(table.table, table.columns.copy())
+        return RawLegendQL(database, [table], table, [FromClause(database.name, table.table)])
 
     @classmethod
     def from_db(cls, database: Database, table: str, columns: Dict[str, Type]) -> RawLegendQL:
@@ -26,13 +28,14 @@ class RawLegendQL:
     def bind[R: Runtime](self, runtime: R) -> DataFrame:
         return DataFrame(runtime, self._clauses)
 
-    def eval[R: Runtime, T](self, runtime: R) -> T:
+    def eval[R: Runtime, T](self, runtime: R) -> DataFrame:
         return self.bind(runtime).eval()
 
     def _add_clause(self, clause: Clause) -> None:
         self._clauses.append(clause)
 
     def _update_table(self, table: Table) -> None:
+        self._table_history.append(table)
         self._table = table
 
     def select(self, *names: str) -> RawLegendQL:

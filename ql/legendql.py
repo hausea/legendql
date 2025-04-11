@@ -28,7 +28,7 @@ class LegendQL:
     def bind[R: Runtime](self, runtime: R) -> DataFrame:
         return self._internal.bind(runtime)
 
-    def eval[R: Runtime, T](self, runtime: R) -> T:
+    def eval[R: Runtime, T](self, runtime: R) -> DataFrame:
         return self._internal.eval(runtime)
 
     def select(self, columns: Callable) -> LegendQL:

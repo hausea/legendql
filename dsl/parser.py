@@ -65,32 +65,35 @@ class Parser:
                 return (Parser._parse_select(lambda_node.body, new_table), new_table)
             case ParseType.filter:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                new_table = tables[0]
+                new_table = Table(tables[0].table, tables[0].columns.copy())
                 return (Parser._parse_filter(lambda_node.body, lambda_args, new_table), new_table)
             case ParseType.extend:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                new_table = tables[0]
+                new_table = Table(tables[0].table, tables[0].columns.copy())
                 return (Parser._parse_extend(lambda_node.body, lambda_args, new_table), new_table)
             case ParseType.join:
                 new_table = "_".join(map(lambda s: s.table, tables))
                 new_table = Table(new_table, {})
                 for s in tables:
-                    new_table.columns.update(s.columns)
+                    new_table.columns.update(s.columns.copy())
                 Parser._validate_lambda_args_length(lambda_args, 2)
                 return (Parser._parse_join(lambda_node.body, lambda_args, new_table), new_table)
             case ParseType.rename:
+                new_table = Table(tables[0].table, tables[0].columns.copy())
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                return (Parser._parse_rename(lambda_node.body), tables[0])
+                return (Parser._parse_rename(lambda_node.body), new_table)
             case ParseType.group_by:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                new_table = tables[0]
+                new_table = Table(tables[0].table, tables[0].columns.copy())
                 return (Parser._parse_group_by(lambda_node.body, lambda_args, new_table), new_table)
             case ParseType.order_by:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                return (Parser._parse_order_by(lambda_node.body, lambda_args), tables[0])
+                new_table = Table(tables[0].table, tables[0].columns.copy())
+                return (Parser._parse_order_by(lambda_node.body, lambda_args), new_table)
             case ParseType.over:
                 Parser._validate_lambda_args_length(lambda_args, 1)
-                return (Parser._parse_over(lambda_node.body, lambda_args), tables[0])
+                new_table = Table(tables[0].table, tables[0].columns.copy())
+                return (Parser._parse_over(lambda_node.body, lambda_args), new_table)
             case _:
                 raise ValueError(f"Unknown ParseType: {ptype}")
 
