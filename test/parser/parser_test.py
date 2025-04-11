@@ -217,6 +217,29 @@ class ParserTest(unittest.TestCase):
                                                       body=ColumnAliasExpression("e", ColumnReferenceExpression(name='salary')),
                                                       orelse=ColumnAliasExpression("e", ColumnReferenceExpression(name='min_salary')))))], p);
 
+    def test_modulo(self):
+        lq = LegendQL.from_db("employee", "employee", {"salary": int})
+        extend = lambda e: (mod_salary := e.salary % 2 )
+        p = Parser.parse(extend, [lq._internal._table], ParseType.extend)[0]
+
+        self.assertEqual([ComputedColumnAliasExpression(alias='mod_salary',
+                               expression=LambdaExpression(parameters=['e'],
+                                                           expression=FunctionExpression(function=ModuloFunction(),
+                                                                                         parameters=[ColumnAliasExpression(alias='e',
+                                                                                                                           reference=ColumnReferenceExpression(name='salary')),
+                                                                                                     LiteralExpression(literal=IntegerLiteral(val=2))])))], p);
+
+    def test_exponent(self):
+        lq = LegendQL.from_db("employee", "employee", {"salary": int})
+        extend = lambda e: (exp_salary := e.salary ** 2 )
+        p = Parser.parse(extend, [lq._internal._table], ParseType.extend)[0]
+
+        self.assertEqual([ComputedColumnAliasExpression(alias='exp_salary',
+                               expression=LambdaExpression(parameters=['e'],
+                                                           expression=FunctionExpression(function=ExponentFunction(),
+                                                                                         parameters=[ColumnAliasExpression(alias='e',
+                                                                                                                           reference=ColumnReferenceExpression(name='salary')),
+                                                                                                     LiteralExpression(literal=IntegerLiteral(val=2))])))], p);
 
 if __name__ == '__main__':
     unittest.main()

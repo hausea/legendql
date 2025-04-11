@@ -1,12 +1,15 @@
 import unittest
 
+from _datetime import datetime
+
 from dialect.purerelation.dialect import NonExecutablePureRuntime
 from model.metamodel import IntegerLiteral, InnerJoinType, BinaryExpression, ColumnAliasExpression, LiteralExpression, \
     EqualsBinaryOperator, OperandExpression, FunctionExpression, \
     CountFunction, AddBinaryOperator, SubtractBinaryOperator, MultiplyBinaryOperator, DivideBinaryOperator, \
     ColumnReferenceExpression, ComputedColumnAliasExpression, MapReduceExpression, LambdaExpression, \
     VariableAliasExpression, \
-    AverageFunction, OrderByExpression, AscendingOrderType, DescendingOrderType
+    AverageFunction, OrderByExpression, AscendingOrderType, DescendingOrderType, IfExpression, \
+    GreaterThanBinaryOperator, DateLiteral, ModuloFunction, ExponentFunction
 from model.schema import Database, Table
 from ql.rawlegendql import RawLegendQL
 
@@ -170,4 +173,40 @@ class TestClauseToPureRelationDialect(unittest.TestCase):
         pure_relation = data_frame.executable_to_string()
         self.assertEqual(
             "#>{local::DuckDuckDatabase.table}#->sort([~columnA->ascending(), ~columnB->descending()])->from(local::DuckDuckRuntime)",
+            pure_relation)
+
+    def test_conditional(self):
+        runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
+        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "columnA": int, "columnB": int})
+                      .extend([ComputedColumnAliasExpression("conditional", LambdaExpression(["a"], IfExpression(test=BinaryExpression(left=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("columnA"))), right=OperandExpression(ColumnAliasExpression("a", ColumnReferenceExpression("columnB"))), operator=GreaterThanBinaryOperator()), body=ColumnAliasExpression("a", ColumnReferenceExpression("columnA")), orelse=ColumnAliasExpression("a", ColumnReferenceExpression("columnB")))))])
+                      .bind(runtime))
+        pure_relation = data_frame.executable_to_string()
+        self.assertEqual(
+            "#>{local::DuckDuckDatabase.table}#->extend(~[conditional:a | if($a.columnA>$a.columnB, | $a.columnA, | $a.columnB)])->from(local::DuckDuckRuntime)",
+            pure_relation)
+
+    def test_date(self):
+        runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
+        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "columnA": int, "columnB": int})
+                      .extend([
+                        ComputedColumnAliasExpression("dateGreater", LambdaExpression(parameters=["a"], expression=BinaryExpression(left=OperandExpression(LiteralExpression(literal=DateLiteral(datetime(2025, 4, 11)))), right=OperandExpression(LiteralExpression(literal=DateLiteral(datetime(2025, 4, 12)))), operator=GreaterThanBinaryOperator()))),
+                        ComputedColumnAliasExpression("dateTimeGreater", LambdaExpression(parameters=["a"], expression=BinaryExpression(left=OperandExpression(LiteralExpression(literal=DateLiteral(datetime(2025, 4, 11, 10, 0, 0)))), right=OperandExpression(LiteralExpression(literal=DateLiteral(datetime(2025, 4, 12, 10, 0, 0)))), operator=GreaterThanBinaryOperator()))),
+                      ])
+                      .bind(runtime))
+        pure_relation = data_frame.executable_to_string()
+        self.assertEqual(
+            "#>{local::DuckDuckDatabase.table}#->extend(~[dateGreater:a | %2025-04-11T00:00:00>%2025-04-12T00:00:00, dateTimeGreater:a | %2025-04-11T10:00:00>%2025-04-12T10:00:00])->from(local::DuckDuckRuntime)",
+            pure_relation)
+
+    def test_modulo_and_exponent(self):
+        runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
+        data_frame = (RawLegendQL.from_db("local::DuckDuckDatabase", "table", {"id": int, "columnA": int})
+                      .extend([
+                        ComputedColumnAliasExpression("modulo", LambdaExpression(["a"], FunctionExpression(parameters=[ColumnAliasExpression("a", ColumnReferenceExpression("column")), LiteralExpression(literal=IntegerLiteral(2))], function=ModuloFunction()))),
+                        ComputedColumnAliasExpression("exponent", LambdaExpression(["a"], FunctionExpression(parameters=[ColumnAliasExpression("a", ColumnReferenceExpression("column")), LiteralExpression(literal=IntegerLiteral(2))], function=ExponentFunction())))
+                      ])
+                      .bind(runtime))
+        pure_relation = data_frame.executable_to_string()
+        self.assertEqual(
+            "#>{local::DuckDuckDatabase.table}#->extend(~[modulo:a | $a.column->mod(2), exponent:a | $a.column->pow(2)])->from(local::DuckDuckRuntime)",
             pure_relation)

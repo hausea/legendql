@@ -76,6 +76,16 @@ class AverageFunction(Function):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_average_function(self, parameter)
 
+@dataclass
+class ModuloFunction(Function):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_modulo_function(self, parameter)
+
+@dataclass
+class ExponentFunction(Function):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_exponent_function(self, parameter)
+
 class Expression(ABC):
     @abstractmethod
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
@@ -178,16 +188,6 @@ class DivideBinaryOperator(BinaryOperator):
         return visitor.visit_divide_binary_operator(self, parameter)
 
 @dataclass
-class ModuloBinaryOperator(BinaryOperator):
-    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
-        return visitor.visit_modulo_binary_operator(self, parameter)
-
-@dataclass
-class ExponentBinaryOperator(BinaryOperator):
-    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
-        return visitor.visit_exponent_binary_operator(self, parameter)
-
-@dataclass
 class BitwiseAndBinaryOperator(BinaryOperator):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_bitwise_and_binary_operator(self, parameter)
@@ -264,12 +264,6 @@ class IfExpression(Expression):
 
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_if_expression(self, parameter)
-
-@dataclass
-class NotExpression(Expression):
-    expression: Expression
-    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
-        return visitor.visit_not_expression(self, parameter)
 
 class OrderType(Expression, ABC):
     pass
@@ -576,6 +570,12 @@ class ExecutionVisitor(ABC):
     def visit_average_function[P, T](self, val: AverageFunction, parameter: P) -> T:
         raise NotImplementedError()
 
+    def visit_modulo_function[P, T](self, val: ModuloFunction, parameter: P) -> T:
+        raise NotImplementedError()
+
+    def visit_exponent_function[P, T](self, val: ExponentFunction, parameter: P) -> T:
+        raise NotImplementedError()
+
     @abstractmethod
     def visit_filter_clause[P, T](self, val: FilterClause, parameter: P) -> T:
         raise NotImplementedError()
@@ -633,10 +633,6 @@ class ExecutionVisitor(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_not_expression[P, T](self, val: NotExpression, parameter: P) -> T:
-        raise NotImplementedError()
-
-    @abstractmethod
     def visit_order_by_expression[P, T](self, val: OrderByExpression, parameter: P) -> T:
         raise NotImplementedError()
 
@@ -670,14 +666,6 @@ class ExecutionVisitor(ABC):
 
     @abstractmethod
     def visit_is_not_binary_operator[P, T](self, self1, parameter: P) -> T:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def visit_modulo_binary_operator[P, T](self, self1, parameter: P) -> T:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def visit_exponent_binary_operator[P, T](self, self1, parameter: P) -> T:
         raise NotImplementedError()
 
     @abstractmethod

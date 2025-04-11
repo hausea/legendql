@@ -10,9 +10,9 @@ from model.metamodel import ExecutionVisitor, JoinClause, LimitClause, DistinctC
     NotUnaryOperator, InnerJoinType, LeftJoinType, ColumnAliasExpression, \
     CountFunction, JoinExpression, Clause, FromClause, AddBinaryOperator, \
     MultiplyBinaryOperator, SubtractBinaryOperator, DivideBinaryOperator, OffsetClause, RenameClause, \
-    OrderByExpression, NotExpression, IfExpression, ColumnReferenceExpression, DateLiteral, GroupByExpression, \
+    OrderByExpression, IfExpression, ColumnReferenceExpression, DateLiteral, GroupByExpression, \
     ComputedColumnAliasExpression, VariableAliasExpression, MapReduceExpression, LambdaExpression, AverageFunction, \
-    AscendingOrderType, DescendingOrderType, OrderByClause
+    AscendingOrderType, DescendingOrderType, OrderByClause, ModuloFunction, ExponentFunction
 
 
 @dataclass
@@ -108,9 +108,9 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
 
     def visit_function_expression(self, val: FunctionExpression, parameter: str) -> str:
         #TODO: AJH: this probably isn't right
-        parameters = ", ".join(map(lambda expr: expr.visit(self, ""), val.parameters))
-        function_string = val.function.visit(self, "")
-        return parameters + function_string
+        parameters = list(map(lambda expr: expr.visit(self, ""), val.parameters))
+        function_string = val.function.visit(self, ",".join(parameters[1:]))
+        return parameters[0] + function_string
 
     def visit_map_reduce_expression(self, val: MapReduceExpression, parameter: str) -> str:
         return val.map_expression.visit(self, "") + " : " + val.reduce_expression.visit(self, "")
@@ -123,6 +123,12 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
 
     def visit_average_function(self, val: AverageFunction, parameter: str) -> str:
         return "->avg()"
+
+    def visit_modulo_function[P, T](self, val: ModuloFunction, parameter: P) -> T:
+        return f"->mod({parameter})"
+
+    def visit_exponent_function[P, T](self, val: ExponentFunction, parameter: P) -> T:
+        return f"->pow({parameter})"
 
     def visit_filter_clause(self, val: FilterClause, parameter: str) -> str:
         return "filter(" + val.expression.visit(self, "") + ")"
@@ -164,16 +170,13 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
         return "JoinKind.LEFT"
 
     def visit_date_literal(self, val: DateLiteral, parameter: str) -> str:
-        raise NotImplementedError()
+        return f"%{val.val.isoformat()}"
 
     def visit_column_reference_expression(self, val: ColumnReferenceExpression, parameter: str) -> str:
         return val.name
 
     def visit_if_expression(self, val: IfExpression, parameter: str) -> str:
-        raise NotImplementedError()
-
-    def visit_not_expression(self, val: NotExpression, parameter: str) -> str:
-        raise NotImplementedError()
+        return f"if({val.test.visit(self, parameter)}, | {val.body.visit(self, parameter)}, | {val.orelse.visit(self, parameter)})"
 
     def visit_order_by_expression(self, val: OrderByExpression, parameter: str) -> str:
         return f"~{val.expression.visit(self, parameter)}->{val.direction.visit(self, parameter)}()"
@@ -203,12 +206,6 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
         raise NotImplementedError()
 
     def visit_is_not_binary_operator(self, self1, parameter: str) -> str:
-        raise NotImplementedError()
-
-    def visit_modulo_binary_operator(self, self1, parameter: str) -> str:
-        raise NotImplementedError()
-
-    def visit_exponent_binary_operator(self, self1, parameter: str) -> str:
         raise NotImplementedError()
 
     def visit_bitwise_and_binary_operator(self, self1, parameter: str) -> str:

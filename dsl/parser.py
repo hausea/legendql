@@ -13,15 +13,15 @@ from typing import Callable, List, Union, Dict, Tuple
 
 from model.functions import StringConcatFunction
 from model.metamodel import Expression, BinaryExpression, BinaryOperator, \
-    ColumnReferenceExpression, BooleanLiteral, IfExpression, NotExpression, OrderByExpression, \
+    ColumnReferenceExpression, BooleanLiteral, IfExpression, OrderByExpression, \
     FunctionExpression, \
     OperandExpression, AndBinaryOperator, OrBinaryOperator, IntegerLiteral, StringLiteral, EqualsBinaryOperator, \
     NotEqualsBinaryOperator, LessThanBinaryOperator, LessThanEqualsBinaryOperator, GreaterThanBinaryOperator, \
     GreaterThanEqualsBinaryOperator, InBinaryOperator, NotInBinaryOperator, IsBinaryOperator, IsNotBinaryOperator, \
-    AddBinaryOperator, SubtractBinaryOperator, MultiplyBinaryOperator, DivideBinaryOperator, ModuloBinaryOperator, \
-    ExponentBinaryOperator, BitwiseOrBinaryOperator, BitwiseAndBinaryOperator, DateLiteral, GroupByExpression, \
+    AddBinaryOperator, SubtractBinaryOperator, MultiplyBinaryOperator, DivideBinaryOperator, BitwiseOrBinaryOperator, \
+    BitwiseAndBinaryOperator, DateLiteral, GroupByExpression, \
     DescendingOrderType, ComputedColumnAliasExpression, AscendingOrderType, ColumnAliasExpression, LambdaExpression, \
-    VariableAliasExpression, MapReduceExpression
+    VariableAliasExpression, MapReduceExpression, UnaryExpression, NotUnaryOperator, ModuloFunction, ExponentFunction
 from model.schema import Table
 
 class ParseType(Enum):
@@ -288,6 +288,11 @@ class Parser:
             left = Parser._parse_lambda_body(node.left, args, new_table, implicit_aliases)
             right = Parser._parse_lambda_body(node.right, args, new_table, implicit_aliases)
 
+            if isinstance(node.op, ast.Mod):
+                return FunctionExpression(parameters=[left, right], function=ModuloFunction())
+            elif isinstance(node.op, ast.Pow):
+                return FunctionExpression(parameters=[left, right], function=ExponentFunction())
+
             comp_op = Parser._get_binary_operator(node.op)
 
             # Ensure left and right are Expression objects, not lists or tuples
@@ -366,7 +371,7 @@ class Parser:
                 raise ValueError(f"Unsupported expression to UnaryOp: {operand}")
 
             if isinstance(node.op, ast.Not):
-                return NotExpression(operand)
+                return UnaryExpression(operator=NotUnaryOperator(), expression=OperandExpression(operand))
             else:
                 # Other unary operations (e.g., +, -)
                 # In a real implementation, we would handle this more robustly
@@ -531,10 +536,6 @@ class Parser:
             return MultiplyBinaryOperator()
         elif isinstance(op, ast.Div):
             return DivideBinaryOperator()
-        elif isinstance(op, ast.Mod):
-            return ModuloBinaryOperator()
-        elif isinstance(op, ast.Pow):
-            return ExponentBinaryOperator()
         elif isinstance(op, ast.BitOr):
             return BitwiseOrBinaryOperator()
         elif isinstance(op, ast.BitAnd):

@@ -25,6 +25,10 @@ class LegendQL:
     def from_db(cls, database: Database, table: str, columns: Dict[str, Type]) -> LegendQL:
         return LegendQL.from_table(database, Table(table, columns))
 
+    @classmethod
+    def from_db(cls, database: str, table: str, columns: Dict[str, Type]) -> LegendQL:
+        return LegendQL.from_table(Database(name=database, tables=[]), Table(table, columns))
+
     def bind[R: Runtime](self, runtime: R) -> DataFrame:
         return self._internal.bind(runtime)
 
