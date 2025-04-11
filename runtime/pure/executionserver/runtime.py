@@ -52,6 +52,4 @@ class ExecutionServerRuntime(PureRuntime):
         rows = []
         for row in result["result"]["rows"]:
             rows.append(row["values"])
-
-        print(rows)
         return TDS(relation, sql, headers, rows)
