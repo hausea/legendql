@@ -10,20 +10,20 @@ from model.schema import Table, Database
 
 
 @dataclass
-class RawLegendQL:
+class Query:
     _database: Database
     _table_history: []
     _table: Table
     _clauses: List[Clause]
 
     @classmethod
-    def from_table(cls, database: Database, table: Table) -> RawLegendQL:
+    def from_table(cls, database: Database, table: Table) -> Query:
         table = Table(table.table, table.columns.copy())
-        return RawLegendQL(database, [table], table, [FromClause(database.name, table.table)])
+        return Query(database, [table], table, [FromClause(database.name, table.table)])
 
     @classmethod
-    def from_db(cls, database: Database, table: str, columns: Dict[str, Type]) -> RawLegendQL:
-        return RawLegendQL.from_table(database, Table(table, columns))
+    def from_db(cls, database: Database, table: str, columns: Dict[str, Type]) -> Query:
+        return Query.from_table(database, Table(table, columns))
 
     def bind[R: Runtime](self, runtime: R) -> DataFrame:
         return DataFrame(runtime, self._clauses)
@@ -38,38 +38,38 @@ class RawLegendQL:
         self._table_history.append(table)
         self._table = table
 
-    def select(self, *names: str) -> RawLegendQL:
+    def select(self, *names: str) -> Query:
         self._add_clause(SelectionClause(list(map(lambda name: ColumnReferenceExpression(name), names))))
         return self
 
-    def rename(self, *renames: Tuple[str, str]) -> RawLegendQL:
+    def rename(self, *renames: Tuple[str, str]) -> Query:
         self._add_clause(RenameClause(list(map(lambda rename: ColumnAliasExpression(alias=rename[1], reference=ColumnReferenceExpression(name=rename[0])), renames))))
         return self
 
-    def extend(self, extend: List[Expression]) -> RawLegendQL:
+    def extend(self, extend: List[Expression]) -> Query:
         self._add_clause(ExtendClause(extend))
         return self
 
-    def filter(self, filter_clause: Expression) -> RawLegendQL:
+    def filter(self, filter_clause: Expression) -> Query:
         self._add_clause(FilterClause(filter_clause))
         return self
 
-    def group_by(self, selections: List[Expression], group_by: List[Expression], having: Expression = None) -> RawLegendQL:
+    def group_by(self, selections: List[Expression], group_by: List[Expression], having: Expression = None) -> Query:
         self._add_clause(GroupByClause(GroupByExpression(selections, group_by, having)))
         return self
 
-    def limit(self, limit: int) -> RawLegendQL:
+    def limit(self, limit: int) -> Query:
         self._add_clause(LimitClause(IntegerLiteral(limit)))
         return self
 
-    def offset(self, offset: int) -> RawLegendQL:
+    def offset(self, offset: int) -> Query:
         self._add_clause(OffsetClause(IntegerLiteral(offset)))
         return self
 
-    def order_by(self, *ordering: OrderByExpression) -> RawLegendQL:
+    def order_by(self, *ordering: OrderByExpression) -> Query:
         self._add_clause(OrderByClause(list(ordering)))
         return self
 
-    def join(self, database: str, table: str, join_type: JoinType, on_clause: Expression) -> RawLegendQL:
+    def join(self, database: str, table: str, join_type: JoinType, on_clause: Expression) -> Query:
         self._add_clause(JoinClause(FromClause(database, table), join_type, JoinExpression(on_clause)))
         return self

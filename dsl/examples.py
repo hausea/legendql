@@ -28,7 +28,7 @@ dep = LegendQL.from_table(database, dep_table)
  .extend(lambda r: (calc_col := r.id + r.sum_salary))
  )
 
-for clause in emp._internal._clauses:
+for clause in emp._query._clauses:
     print(clause)
 
 
@@ -55,7 +55,7 @@ lq = lq.extend(lambda e: (country_code := left(e.country, 2)))
 lq = lq.order_by(lambda e: [e.sum_gross_cost, -e.country])
 lq = lq.limit(10)
 
-for clause in lq._internal._clauses:
+for clause in lq._query._clauses:
     print(clause)
 
 '''
@@ -82,7 +82,7 @@ lq = (LegendQL.from_table(database, emp_table)
  .order_by(lambda e: [e.sum_gross_cost, -e.country])
  .limit(10))
 
-for clause in lq._internal._clauses:
+for clause in lq._query._clauses:
     print(clause)
 
 
@@ -104,7 +104,7 @@ LegendQL.from_table(database, emp_table)
         qualify=avg_val > 100_000)))
  )
 
-for clause in emp._internal._clauses:
+for clause in emp._query._clauses:
     print(clause)
 
 emp_table = Table("employees", {"id": int, "name": str, "dept_id": str, "salary": float, "location": str})
@@ -116,7 +116,7 @@ LegendQL.from_table(database, emp_table)
  .extend(lambda r: (avg_val := over(r.location, avg(r.salary))))
  )
 
-for clause in emp._internal._clauses:
+for clause in emp._query._clauses:
     print(clause)
 
 emp_table = Table("employees", {"id": int, "name": str, "title": str, "dept_id": str, "salary": float})
@@ -128,7 +128,7 @@ LegendQL.from_table(database, emp_table)
  .group_by(lambda r: aggregate(r.title, avg_salary := avg(r.salary)))
  )
 
-for clause in emp._internal._clauses:
+for clause in emp._query._clauses:
     print(clause)
 
 emp_table = Table("employees", {"id": int, "name": str, "title": str, "dept_id": str, "salary": float})
@@ -140,7 +140,7 @@ LegendQL.from_table(database, emp_table)
  .group_by(lambda r: aggregate([r.title, r.dept_id], avg_salary := avg(r.salary)))
  )
 
-for clause in emp._internal._clauses:
+for clause in emp._query._clauses:
     print(clause)
 
 emp_table = Table("employees", {"id": int, "name": str, "title": str, "dept_id": str, "salary": float})
@@ -152,7 +152,7 @@ LegendQL.from_table(database, emp_table)
  .group_by(lambda r: aggregate(r.title, avg_salary := avg(r.salary), having=avg_salary > 100_000))
  )
 
-for clause in emp._internal._clauses:
+for clause in emp._query._clauses:
     print(clause)
 
 emp_table = Table("employees", {"id": int, "name": str, "dept_id": str, "salary": float, "title": str})
@@ -167,7 +167,7 @@ loc = LegendQL.from_table(database, loc_table)
  .left_join(dep, lambda e, d: (e.dept_id == d.id, (new_dept_id := d.id, new_dept_name := d.name)))
  .left_join(loc, lambda d, l: (d.city == l.id, (new_loc_id := l.id, new_loc_name := l.name, new_loc_code := l.code))))
 
-for clause in emp._internal._clauses:
+for clause in emp._query._clauses:
     print(clause)
 
 emp_table = Table("employees", {"id": int, "name": str, "dept_id": str, "salary": float})
@@ -182,7 +182,7 @@ loc = LegendQL.from_table(database, loc_table)
  .left_join(dep, lambda e, d: (e.dept_id == d.id, [(new_dept_id := d.id), (new_dept_name := d.name)]))
  .left_join(loc, lambda d, l: (d.city == l.id, (new_loc_id := l.id, new_loc_name := l.name, new_loc_code := l.code))))
 
-for clause in emp._internal._clauses:
+for clause in emp._query._clauses:
     print(clause)
 
 dep_table = Table("department", {"id": int, "name": str, "city": str, "code": str})
@@ -191,9 +191,9 @@ database = Database("db", [dep_table])
 dep = LegendQL.from_table(database, dep_table)
 dep.extend(lambda e: (id_plus_one := e.id + 1))
 
-print(dep._internal._table.columns)
+print(dep._query._table.columns)
 
-for clause in dep._internal._clauses:
+for clause in dep._query._clauses:
     print(clause)
 
 emp_table = Table("employees", {"id": int, "name": str, "dept_id": str, "salary": float})
@@ -204,7 +204,7 @@ dep = LegendQL.from_table(database, dep_table)
 
 emp.left_join(dep, lambda e, d: (e.dept_id == d.id, [(new_dept_id := d.id), (new_dept_name := d.name)]))
 
-print(emp._internal._table.columns)
+print(emp._query._table.columns)
 
 dep_table = Table("department", {"id": int, "name": str, "city": str, "code": str})
 database = Database("db", [dep_table])
@@ -212,9 +212,9 @@ dep = LegendQL.from_table(database, dep_table)
 
 dep.rename(lambda d: (new_dept_id := d.id, new_dept_name := d.name))
 
-print(dep._internal._table.columns)
+print(dep._query._table.columns)
 
-for clause in dep._internal._clauses:
+for clause in dep._query._clauses:
     print(clause)
 
 
@@ -224,9 +224,9 @@ dep = LegendQL.from_table(database, dep_table)
 
 dep.select(lambda d: [d.id, d.name])
 
-print(dep._internal._table.columns)
+print(dep._query._table.columns)
 
-for clause in dep._internal._clauses:
+for clause in dep._query._clauses:
     print(clause)
 
 
@@ -236,7 +236,7 @@ dep = LegendQL.from_table(database, dep_table)
 
 dep.group_by(lambda d: aggregate([d.id, d.name], (sum_test := sum(d.code), count_test := count(d.city))))
 
-print(dep._internal._table.columns)
+print(dep._query._table.columns)
 
-for clause in dep._internal._clauses:
+for clause in dep._query._clauses:
     print(clause)
