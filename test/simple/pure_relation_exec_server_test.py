@@ -1,5 +1,5 @@
 from model.schema import Table, Database
-from ql.rawlegendql import RawLegendQL
+from ql.query import Query
 from runtime.pure.db.duckdb import DuckDBDatabaseType
 from runtime.pure.executionserver.runtime import ExecutionServerRuntime
 from test.executionserver.test import ExecutionServerTest
@@ -16,7 +16,7 @@ class TestExecutionServerEvaluation(ExecutionServerTest):
 
     def test_execution_against_execution_server(self):
         runtime = ExecutionServerRuntime("local::DuckDuckRuntime", DuckDBDatabaseType(ExecutionServerTest.get_duckdb_path()), "http://localhost:6300", database)
-        data_frame = (RawLegendQL.from_table(database, table)
+        data_frame = (Query.from_table(database, table)
                       .select("id", "departmentId", "first", "last")
                       .bind(runtime))
 
