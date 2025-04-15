@@ -17,11 +17,9 @@ class Database:
     tables: List[Table]
     pass
 
-class Sensitivity(Enum):
-    external_public = "DP00"
-    enterprise = "DP10"
-    producer_entitled = "DP20"
-    high_risk = "DP30"
+@dataclass
+class Classification:
+    level: str
 
 @dataclass
 class TableOptions:
@@ -29,7 +27,12 @@ class TableOptions:
 
 @dataclass
 class Dataset(Table):
-    schema_name: str
+    schema: str
     primary_key: Union[str, List[str]]
-    sensitivity: Sensitivity
+    classification: Optional[Classification] = None,
     options: Optional[TableOptions] = None
+
+external_public = Classification("DP00")
+enterprise = Classification("DP10")
+producer_entitled = Classification("DP20")
+high_risk = Classification("DP30")
