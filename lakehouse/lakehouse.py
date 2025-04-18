@@ -2,53 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional, List, Callable, Tuple
+from typing import Dict, Optional, List, Tuple, Union, Type
 
-import pandas as pd
-import polars as pl
-
-from model.schema import Table, Classification
+from extract import Legend, IngestSource
+from model.schema import Table
 from ql.legendql import LegendQL
 
-@dataclass
-class IngestSource:
-    pass
-
-@dataclass
-class FileSource(IngestSource):
-    file: str
-
-@dataclass
-class CSV(FileSource):
-    column_delimiter: str = ',',
-    row_delimiter: str = '\n',
-    quote_character: str = '"'
-    escape_character: str = '\\'
-    starting_row = 0
-
-@dataclass
-class Avro(FileSource):
-    pass
-
-@dataclass
-class Parquet(FileSource):
-    pass
-
-@dataclass
-class Json(FileSource):
-    pass
-
-@dataclass
-class Legend(IngestSource):
-    query: LegendQL
-
-@dataclass
-class Pandas(IngestSource):
-    extract_func: Callable[..., pd.DataFrame]
-
-@dataclass
-class Polars(IngestSource):
-    extract_func: Callable[..., pl.DataFrame]
 
 class MilestoneType(Enum):
     batch_milestone = 'batch_milestone'
@@ -69,34 +28,23 @@ class IngestTrigger:
     pass
 
 @dataclass
-class Runnable(Dict):
-    source: IngestSource
-    versioning: Versioning
-    classification: Classification
-
-@dataclass
-class Ingest(Runnable):
-    datasets: Dict[str, Table]
+class Ingest(Dict):
+    datasets: Dict[str, Dataset]
 
     def __getattr__(self, key) -> Table:
         try:
-            return self.datasets[key]
+            dataset = self.datasets[key]
+            return Table(dataset.table, dataset.get_columns())
         except KeyError as e:
             raise AttributeError(f"'IngestConfig' object has no Dataset '{key}'") from e
 
 @dataclass
-class IngestDeployed(Ingest):
-    deployment_id: int
-    trigger: IngestTrigger
-
-@dataclass
-class MaterializedView(Runnable):
-    source: Dict[str, Legend]
-    trigger: IngestTrigger
+class MaterializedView(Dict):
+    views: Dict[str, View]
 
     def __getattr__(self, key) -> Table:
         try:
-            return self.source[key].query.get_table_definition()
+            return self.views[key].source.query.get_table_definition()
         except KeyError as e:
             raise AttributeError(f"'IngestConfig' object has no Dataset '{key}'") from e
 
@@ -160,12 +108,25 @@ class Lakehouse:
 
     @classmethod
     def register_producer(cls, tenant: Tenant, deployment_id: int) -> Lakehouse:
+        # call producer registration script here
         return Lakehouse(tenant, deployment_id)
 
     def run_ingest(self, ingest: Ingest):
+        # first, upload the ingest spec to the lakehouse
+        # self._upload_ingest_spec(ingest)
+        # then call first ingest API to get s3 location for upload
+        # location = self._get_staging_location()
+        # then actually do the extract and push to location
+        # self._extract_and_stage_data(location)
+        # finally, do the actual ingest
+        # self._ingest_data()
         pass
 
-    def run_materialized_view(self, view: MaterializedView):
+    def materialize_view(self, view: MaterializedView):
+        # first, upload the ingest spec to the lakehouse
+        # self._upload_ingest_spec(ingest)
+        # run the materialization
+        # self._run_materialization()
         pass
 
     def publish_data_product(self, dp: DataProduct):
@@ -190,3 +151,40 @@ hcm_dev = Tenant("hcm", dev)
 hcm_prod = Tenant("hcm", prod)
 cfo_dev = Tenant("cf&o", dev)
 cfo_prod = Tenant("cf&o", prod)
+
+
+@dataclass
+class Classification:
+    level: str
+
+@dataclass
+class TableOptions:
+    pass
+
+@dataclass
+class Dataset:
+    schema: str
+    table: str
+    primary_key: Union[str, List[str]]
+    versioning: Versioning
+    source: IngestSource
+    columns: Optional[Dict[str, Optional[Type]]] = None
+    classification: Optional[Classification] = None
+    options: Optional[TableOptions] = None
+    trigger: Optional[IngestTrigger] = None
+
+    def get_columns(self) -> Dict[str, Optional[Type]]:
+        if self.columns is not None:
+            return self.columns
+        else:
+            return self.source.columns()
+
+@dataclass
+class View(Dataset):
+    source: Legend
+
+external_public = Classification("DP00")
+enterprise = Classification("DP10")
+producer_entitled = Classification("DP20")
+high_risk = Classification("DP30")
+producer_only = Classification("")
