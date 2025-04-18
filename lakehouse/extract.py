@@ -13,14 +13,17 @@ from pyarrow import json
 
 from ql.legendql import LegendQL
 
+
 @dataclass
 class IngestSource:
     def columns(self) -> Dict[str, Optional[Type]]:
         pass
 
+
 @dataclass
 class FileSource(IngestSource):
     file_name: str
+
 
 @dataclass
 class CSV(FileSource):
@@ -34,9 +37,16 @@ class CSV(FileSource):
         table = ds.dataset(self.file_name, format="csv")
         return dict(zip(table.schema.names, table.schema.types))
 
+
 @dataclass
 class Avro(FileSource):
-    pass
+    def columns(self) -> Dict[str, Optional[Type]]:
+        # Use DuckDB to read Avro file and convert to Arrow table
+        con = duckdb.connect()
+        relation = con.sql(f"SELECT * FROM read_avro('{self.file_name}')")
+        table = relation.arrow()
+        return dict(zip(table.schema.names, table.schema.types))
+
 
 @dataclass
 class Parquet(FileSource):
@@ -44,15 +54,35 @@ class Parquet(FileSource):
         table = ds.dataset(self.file_name, format="parquet")
         return dict(zip(table.schema.names, table.schema.types))
 
+
 @dataclass
 class Json(FileSource):
     def columns(self) -> Dict[str, Optional[Type]]:
-        table = pa.json.read_json(self.file_name)
+        # Read the JSON file using DuckDB instead of direct PyArrow JSON reader
+        con = duckdb.connect()
+        relation = con.sql(f"SELECT * FROM read_json('{self.file_name}', auto_detect=true)")
+        table = relation.arrow()
         return dict(zip(table.schema.names, table.schema.types))
+
 
 @dataclass
 class Excel(FileSource):
-    pass
+    sheet_name: Optional[str] = None  # Made optional
+
+    def columns(self) -> Dict[str, Optional[Type]]:
+        # Use DuckDB to read Excel file and convert to Arrow table
+        con = duckdb.connect()
+
+        # Build the SQL query based on whether sheet_name is provided
+        if self.sheet_name:
+            query = f"SELECT * FROM read_xlsx('{self.file_name}', sheet='{self.sheet_name}')"
+        else:
+            query = f"SELECT * FROM read_xlsx('{self.file_name}')"
+
+        relation = con.sql(query)
+        table = relation.arrow()
+        return dict(zip(table.schema.names, table.schema.types))
+
 
 @dataclass
 class PythonSource(IngestSource):
@@ -70,17 +100,21 @@ class PythonSource(IngestSource):
     def get_arrow_table(self, df):
         return pa.table(df)
 
+
 @dataclass
 class Pandas(PythonSource):
     func_or_df: Union[Callable[[], pd.DataFrame]]
+
 
 @dataclass
 class Polars(PythonSource):
     func_or_df: Union[Callable[[], pl.DataFrame]]
 
+
 @dataclass
 class DuckDb(PythonSource):
     func_or_df: Union[Callable[[], duckdb.DuckDBPyRelation]]
+
 
 @dataclass
 class NumPy(PythonSource):
@@ -89,12 +123,14 @@ class NumPy(PythonSource):
     def get_arrow_table(self, df):
         return pa.table(pl.from_numpy(df))
 
+
 @dataclass
 class Arrow(PythonSource):
     func_or_df: Union[Callable[[], pa.Table]]
 
     def get_arrow_table(self, df):
         return df
+
 
 @dataclass
 class Legend(IngestSource):
