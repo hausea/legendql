@@ -22,7 +22,7 @@ dep = LegendQL.from_table(database, dep_table)
     frame=rows(0, unbounded())))])
  .group_by(lambda r: aggregate(
     [ r.id, r.name ],
-    (sum_salary := sum(r.salary), count_dept := count(r.department_name) ),
+    [sum_salary := sum(r.salary), count_dept := count(r.department_name) ],
     having=sum_salary > 100_000))
  .filter(lambda r: r.id > 100)
  .extend(lambda r: (calc_col := r.id + r.sum_salary))
@@ -74,9 +74,11 @@ lq = (LegendQL.from_table(database, emp_table)
  .filter(lambda e: e.gross_cost > 0)
  .group_by(lambda e: aggregate(
     [e.title, e.country],
-    [avg_gross_salary := avg(e.gross_salary),
-     sum_gross_cost := sum(e.gross_cost)],
-    having=e.sum_gross_cost > 100_000))
+    [
+        avg_gross_salary := avg(e.gross_salary),
+        sum_gross_cost := sum(e.gross_cost)
+    ],
+    having=sum_gross_cost > 100_000))
  .extend(lambda e: (new_id := f"{e.title}_{e.country}"))
  .extend(lambda e: (country_code := left(e.country, 2)))
  .order_by(lambda e: [e.sum_gross_cost, -e.country])
@@ -91,7 +93,6 @@ for clause in lq._query._clauses:
 '''
 emp_table = Table("employees", {"id": int, "name": str, "dept_id": str, "salary": float, "location": str})
 database = Database("db", [emp_table, dep_table])
-emp = LegendQL.from_table(database, emp_table)
 
 emp = (
 LegendQL.from_table(database, emp_table)
@@ -109,7 +110,6 @@ for clause in emp._query._clauses:
 
 emp_table = Table("employees", {"id": int, "name": str, "dept_id": str, "salary": float, "location": str})
 database = Database("db", [emp_table, dep_table])
-emp = LegendQL.from_table(database, emp_table)
 
 emp = (
 LegendQL.from_table(database, emp_table)
@@ -121,7 +121,6 @@ for clause in emp._query._clauses:
 
 emp_table = Table("employees", {"id": int, "name": str, "title": str, "dept_id": str, "salary": float})
 database = Database("db", [emp_table, dep_table])
-emp = LegendQL.from_table(database, emp_table)
 
 emp = (
 LegendQL.from_table(database, emp_table)
@@ -133,7 +132,6 @@ for clause in emp._query._clauses:
 
 emp_table = Table("employees", {"id": int, "name": str, "title": str, "dept_id": str, "salary": float})
 database = Database("db", [emp_table, dep_table])
-emp = LegendQL.from_table(database, emp_table)
 
 emp = (
 LegendQL.from_table(database, emp_table)
@@ -145,7 +143,6 @@ for clause in emp._query._clauses:
 
 emp_table = Table("employees", {"id": int, "name": str, "title": str, "dept_id": str, "salary": float})
 database = Database("db", [emp_table, dep_table])
-emp = LegendQL.from_table(database, emp_table)
 
 emp = (
 LegendQL.from_table(database, emp_table)
@@ -234,7 +231,7 @@ dep_table = Table("department", {"id": int, "name": str, "city": str, "code": st
 database = Database("db", [dep_table])
 dep = LegendQL.from_table(database, dep_table)
 
-dep.group_by(lambda d: aggregate([d.id, d.name], (sum_test := sum(d.code), count_test := count(d.city))))
+dep.group_by(lambda d: aggregate([d.id, d.name], [sum_test := sum(d.code), count_test := count(d.city)]))
 
 print(dep._query._table.columns)
 

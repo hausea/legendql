@@ -7,7 +7,7 @@ from model.metamodel import FromClause, OrderByClause, LimitClause, IntegerLiter
     LeftJoinType, InnerJoinType, Runtime, DataFrame
 from dsl.parser import ParseType
 from model.metamodel import SelectionClause, ExtendClause, FilterClause, GroupByClause, JoinClause, JoinType
-from model.schema import Table, Database, Dataset
+from model.schema import Table, Database
 from ql.query import Query
 
 
@@ -25,7 +25,7 @@ class LegendQL:
         return LegendQL.from_table(database, Table(table, columns))
 
     @classmethod
-    def from_lh(cls, dataset: Dataset) -> LegendQL:
+    def from_lh(cls, dataset: Table) -> LegendQL:
         return LegendQL.from_table(Database("lakehouse", [dataset]), dataset)
 
     def bind[R: Runtime](self, runtime: R) -> DataFrame:
