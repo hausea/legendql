@@ -48,11 +48,11 @@ def test_duckdb_extract() -> duckdb.DuckDBPyRelation:
 # df = test_polars_extract()
 # print(pa.table(df).schema)
 #
-df = test_numpy_extract()
-print(df)
+# df = test_numpy_extract()
+# print(df)
 # print(pa.Table.from_arrays(df))
 
-print(pa.table(pl.from_numpy(df)))
+# print(pa.table(pl.from_numpy(df)))
 #
 # df = test_duckdb_extract()
 # print(pa.table(df).schema)
@@ -61,7 +61,7 @@ print(pa.table(pl.from_numpy(df)))
 # print(df.schema)
 
 
-duckdb.sql("COPY (FROM generate_series(100_000)) TO 'test.parquet' (FORMAT parquet)")
+# duckdb.sql("COPY (FROM generate_series(100_000)) TO 'test.parquet' (FORMAT parquet)")
 
 # import pyarrow.parquet as pq
 # table = pq.read_table('test.parquet')
