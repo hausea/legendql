@@ -9,14 +9,13 @@ import pandas as pd
 import polars as pl
 import pyarrow as pa
 import pyarrow.dataset as ds
-from pyarrow import json
 
 from ql.legendql import LegendQL
 
 
 @dataclass
 class IngestSource:
-    def columns(self) -> Dict[str, Optional[Type]]:
+    def auto_infer_columns(self) -> Dict[str, Optional[Type]]:
         pass
 
 
@@ -33,14 +32,14 @@ class CSV(FileSource):
     escape_character: str = '\\'
     starting_row = 0
 
-    def columns(self) -> Dict[str, Optional[Type]]:
+    def auto_infer_columns(self) -> Dict[str, Optional[Type]]:
         table = ds.dataset(self.file_name, format="csv")
         return dict(zip(table.schema.names, table.schema.types))
 
 
 @dataclass
 class Avro(FileSource):
-    def columns(self) -> Dict[str, Optional[Type]]:
+    def auto_infer_columns(self) -> Dict[str, Optional[Type]]:
         # Use DuckDB to read Avro file and convert to Arrow table
         con = duckdb.connect()
         relation = con.sql(f"SELECT * FROM read_avro('{self.file_name}')")
@@ -50,14 +49,14 @@ class Avro(FileSource):
 
 @dataclass
 class Parquet(FileSource):
-    def columns(self) -> Dict[str, Optional[Type]]:
+    def auto_infer_columns(self) -> Dict[str, Optional[Type]]:
         table = ds.dataset(self.file_name, format="parquet")
         return dict(zip(table.schema.names, table.schema.types))
 
 
 @dataclass
 class Json(FileSource):
-    def columns(self) -> Dict[str, Optional[Type]]:
+    def auto_infer_columns(self) -> Dict[str, Optional[Type]]:
         # Read the JSON file using DuckDB instead of direct PyArrow JSON reader
         con = duckdb.connect()
         relation = con.sql(f"SELECT * FROM read_json('{self.file_name}', auto_detect=true)")
@@ -69,7 +68,7 @@ class Json(FileSource):
 class Excel(FileSource):
     sheet_name: Optional[str] = None  # Made optional
 
-    def columns(self) -> Dict[str, Optional[Type]]:
+    def auto_infer_columns(self) -> Dict[str, Optional[Type]]:
         # Use DuckDB to read Excel file and convert to Arrow table
         con = duckdb.connect()
 
@@ -88,7 +87,7 @@ class Excel(FileSource):
 class PythonSource(IngestSource):
     func_or_df: Union[Callable]
 
-    def columns(self) -> Dict[str, Optional[Type]]:
+    def auto_infer_columns(self) -> Dict[str, Optional[Type]]:
         df = self.func_or_df
 
         if isinstance(self.func_or_df, Callable):
