@@ -1,5 +1,5 @@
 from model.schema import Table, Database
-from ql.legendql import LegendQL
+from legendql.ql import LegendQL
 from runtime.pure.db.duckdb import DuckDBDatabaseType
 from runtime.pure.executionserver.runtime import ExecutionServerRuntime
 from test.executionserver.test import ExecutionServerTest

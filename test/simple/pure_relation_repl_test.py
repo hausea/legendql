@@ -5,7 +5,7 @@ from model.metamodel import BinaryExpression, OperandExpression, ColumnAliasExpr
     FunctionExpression, CountFunction, InnerJoinType, ColumnReferenceExpression, ComputedColumnAliasExpression, \
     MapReduceExpression, LambdaExpression, VariableAliasExpression
 from model.schema import Database, Table
-from ql.query import Query
+from legendql.query import Query
 from runtime.pure.repl.repl_utils import is_repl_running, send_to_repl, load_csv_to_repl
 from runtime.pure.repl.runtime import ReplRuntime
 

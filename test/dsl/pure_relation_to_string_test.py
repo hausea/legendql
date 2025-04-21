@@ -1,9 +1,9 @@
 import unittest
 
 from dialect.purerelation.dialect import NonExecutablePureRuntime
-from dsl.functions import aggregate
+from legendql.functions import aggregate
 from model.schema import Table, Database
-from ql.legendql import LegendQL
+from legendql.ql import LegendQL
 
 
 class TestDslToPureRelationDialect(unittest.TestCase):

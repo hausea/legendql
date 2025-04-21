@@ -11,7 +11,7 @@ from model.metamodel import IntegerLiteral, InnerJoinType, BinaryExpression, Col
     AverageFunction, OrderByExpression, AscendingOrderType, DescendingOrderType, IfExpression, \
     GreaterThanBinaryOperator, DateLiteral, ModuloFunction, ExponentFunction
 from model.schema import Database, Table
-from ql.query import Query
+from legendql.query import Query
 
 
 class TestClauseToPureRelationDialect(unittest.TestCase):
