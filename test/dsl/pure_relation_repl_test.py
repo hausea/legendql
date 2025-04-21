@@ -1,7 +1,7 @@
 import unittest
 
 from model.schema import Table, Database
-from ql.legendql import LegendQL
+from legendql.ql import LegendQL
 from runtime.pure.repl.repl_utils import is_repl_running, send_to_repl, load_csv_to_repl
 from runtime.pure.repl.runtime import ReplRuntime
 

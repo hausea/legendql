@@ -10,7 +10,7 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.dataset as ds
 
-from ql.legendql import LegendQL
+from legendql.ql import LegendQL
 
 
 @dataclass
