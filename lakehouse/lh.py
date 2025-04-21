@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Optional, List, Tuple, Union, Type
 
-from extract import Legend, IngestSource, Polars, CSV, Pandas
+from lakehouse.extract import Legend, IngestSource, Polars, CSV, Pandas
 from model.schema import Table
-from ql.legendql import LegendQL
+from legendql.ql import LegendQL
 
 
 class MilestoneType(Enum):

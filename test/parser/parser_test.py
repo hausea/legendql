@@ -1,11 +1,11 @@
 import unittest
 
-from dsl.functions import aggregate, count, over, avg, rows, unbounded
+from legendql.functions import aggregate, count, over, avg, rows, unbounded
 from model.functions import StringConcatFunction, SumFunction, CountFunction, OverFunction, AvgFunction, \
     UnboundedFunction, RowsFunction
 from model.schema import Table, Database
-from ql.legendql import LegendQL
-from dsl.parser import Parser, ParseType
+from legendql.ql import LegendQL
+from legendql.parser import Parser, ParseType
 from model.metamodel import *
 
 

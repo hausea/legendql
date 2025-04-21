@@ -3,7 +3,7 @@ import lakehouse.hcm as hcm
 
 def config() -> lakehouse.Lakehouse:
 
-    lh = lakehouse.init(lakehouse.gbm_public_dev, 88888888, "positions")
+    lh = lakehouse.init(lakehouse.gm_dev, 88888888, "positions")
 
     lh.config({
 

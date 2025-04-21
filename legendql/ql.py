@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Callable, Type, Dict
 
-from dsl import parser
+from legendql import parser
 from model.metamodel import FromClause, OrderByClause, LimitClause, IntegerLiteral, OffsetClause, RenameClause, \
     LeftJoinType, InnerJoinType, Runtime, DataFrame
-from dsl.parser import ParseType
+from legendql.parser import ParseType
 from model.metamodel import SelectionClause, ExtendClause, FilterClause, GroupByClause, JoinClause, JoinType
 from model.schema import Table, Database
-from ql.query import Query
+from legendql.query import Query
 
 
 class LegendQL:
