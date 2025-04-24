@@ -198,7 +198,6 @@ class ParserTest(unittest.TestCase):
 
         self.assertEqual(str(f), str(p))
 
-    @unittest.skip("need to support window")
     def test_window(self):
         table = Table("employee", {"location": str, "salary": float, "emp_name": str})
         database = Database("employee", [table])

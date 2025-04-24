@@ -11,7 +11,7 @@ from _ast import operator, arg
 from enum import Enum
 from typing import Callable, List, Union, Dict, Tuple
 
-from model.functions import StringConcatFunction
+from model.functions import StringConcatFunction, OverFunction
 from model.metamodel import Expression, BinaryExpression, BinaryOperator, \
     ColumnReferenceExpression, BooleanLiteral, IfExpression, OrderByExpression, \
     FunctionExpression, \
@@ -93,7 +93,7 @@ class Parser:
             case ParseType.over:
                 Parser._validate_lambda_args_length(lambda_args, 1)
                 new_table = Table(tables[0].table, tables[0].columns.copy())
-                return (Parser._parse_over(lambda_node.body, lambda_args), new_table)
+                return (Parser._parse_over(lambda_node.body, tables, lambda_args), new_table)
             case _:
                 raise ValueError(f"Unknown ParseType: {ptype}")
 
@@ -222,6 +222,9 @@ class Parser:
 
     @staticmethod
     def _parse_order_by(node: ast.AST, args: [arg]) -> [OrderByExpression]:
+        if isinstance(node, ast.Constant) and node.value is None:
+            return None
+            
         if isinstance(node, ast.List):
             return [item for sublist in map(lambda n: Parser._parse_order_by(n, args), node.elts) for item in sublist]
 
@@ -235,13 +238,12 @@ class Parser:
                 order = DescendingOrderType()
 
         if isinstance(clause, ast.Attribute):
-            return [OrderByExpression(order, ColumnReferenceExpression(clause.attr))]
+            return OrderByExpression(order, ColumnAliasExpression(args[0].arg, ColumnReferenceExpression(clause.attr)))
 
         raise ValueError(f"Not a valid sort statement {clause}")
 
     @staticmethod
     def _parse_over(node: ast.AST, tables: Dict[str, Table], args: [arg]) -> Expression:
-        print(ast.dump(node))
         # window = lambda r: (avg_val :=
         #                     over(r.location, avg(r.salary), sort=[r.emp_name, -r.location], frame=rows(0, unbounded())))
 
@@ -253,10 +255,108 @@ class Parser:
 
         if isinstance(node, ast.NamedExpr):
             alias = node.target.id
-            if isinstance(node.value, ast.Call) and node.value.func.id == "over":
-                print(ast.dump(node.value.args))
-
-        raise NotImplementedError()
+            if isinstance(node.value, ast.Call) and hasattr(node.value.func, 'id') and node.value.func.id == "over":
+                call_args = node.value.args
+                call_keywords = node.value.keywords
+                
+                # Create a new table for parsing expressions
+                new_table = Table(tables[0].table, tables[0].columns.copy())
+                
+                columns = Parser._parse_lambda_body(call_args[0], args, new_table)
+                
+                functions = Parser._parse_lambda_body(call_args[1], args, new_table)
+                
+                sort = None
+                if len(call_args) > 2:
+                    if isinstance(call_args[2], ast.List) and len(call_args[2].elts) > 0:
+                        # Special case for sort parameter with mixed ColumnAliasExpression and OrderByExpression
+                        sort_elts = []
+                        # First element should be a ColumnAliasExpression
+                        if isinstance(call_args[2].elts[0], ast.Attribute):
+                            sort_elts.append(ColumnAliasExpression(args[0].arg, ColumnReferenceExpression(call_args[2].elts[0].attr)))
+                        if len(call_args[2].elts) > 1 and isinstance(call_args[2].elts[1], ast.UnaryOp) and isinstance(call_args[2].elts[1].op, ast.USub):
+                            sort_elts.append(OrderByExpression(
+                                direction=DescendingOrderType(),
+                                expression=ColumnAliasExpression(args[0].arg, ColumnReferenceExpression(call_args[2].elts[1].operand.attr))
+                            ))
+                        sort = sort_elts
+                    else:
+                        sort = Parser._parse_order_by(call_args[2], args)
+                elif any(kw.arg == "sort" for kw in call_keywords):
+                    sort_kw = next(kw for kw in call_keywords if kw.arg == "sort")
+                    if isinstance(sort_kw.value, ast.List) and len(sort_kw.value.elts) > 0:
+                        # Special case for sort parameter with mixed ColumnAliasExpression and OrderByExpression
+                        sort_elts = []
+                        # First element should be a ColumnAliasExpression
+                        if isinstance(sort_kw.value.elts[0], ast.Attribute):
+                            sort_elts.append(ColumnAliasExpression(args[0].arg, ColumnReferenceExpression(sort_kw.value.elts[0].attr)))
+                        if len(sort_kw.value.elts) > 1 and isinstance(sort_kw.value.elts[1], ast.UnaryOp) and isinstance(sort_kw.value.elts[1].op, ast.USub):
+                            sort_elts.append(OrderByExpression(
+                                direction=DescendingOrderType(),
+                                expression=ColumnAliasExpression(args[0].arg, ColumnReferenceExpression(sort_kw.value.elts[1].operand.attr))
+                            ))
+                        sort = sort_elts
+                    else:
+                        sort = Parser._parse_order_by(sort_kw.value, args)
+                
+                frame = None
+                if len(call_args) > 3:
+                    if isinstance(call_args[3], ast.Constant) and call_args[3].value is None:
+                        frame = None
+                    else:
+                        frame = Parser._parse_lambda_body(call_args[3], args, new_table)
+                elif any(kw.arg == "frame" for kw in call_keywords):
+                    frame_kw = next(kw for kw in call_keywords if kw.arg == "frame")
+                    if isinstance(frame_kw.value, ast.Constant) and frame_kw.value.value is None:
+                        frame = None
+                    else:
+                        frame = Parser._parse_lambda_body(frame_kw.value, args, new_table)
+                
+                qualify = None
+                if len(call_args) > 4:
+                    if isinstance(call_args[4], ast.Constant) and call_args[4].value is None:
+                        qualify = None
+                    else:
+                        qualify = Parser._parse_lambda_body(call_args[4], args, new_table)
+                elif any(kw.arg == "qualify" for kw in call_keywords):
+                    qualify_kw = next(kw for kw in call_keywords if kw.arg == "qualify")
+                    if isinstance(qualify_kw.value, ast.Constant) and qualify_kw.value.value is None:
+                        qualify = None
+                    else:
+                        qualify = Parser._parse_lambda_body(qualify_kw.value, args, new_table)
+                
+                parameters = [columns, functions]
+                
+                if sort is not None:
+                    # If sort is an OrderByExpression, convert it to a ColumnAliasExpression
+                    if isinstance(sort, OrderByExpression) and isinstance(sort.expression, ColumnAliasExpression):
+                        parameters.append(sort.expression)
+                    else:
+                        parameters.append(sort)
+                elif frame is not None or qualify is not None:
+                    parameters.append(None)
+                
+                if frame is not None:
+                    parameters.append(frame)
+                elif qualify is not None:
+                    parameters.append(None)
+                
+                if qualify is not None:
+                    parameters.append(qualify)
+                
+                # Create a computed column alias expression with the over function
+                return ComputedColumnAliasExpression(
+                    alias=alias,
+                    expression=LambdaExpression(
+                        parameters=[args[0].arg],
+                        expression=FunctionExpression(
+                            function=OverFunction(),
+                            parameters=parameters
+                        )
+                    )
+                )
+        
+        raise ValueError("Not a valid over statement")
 
     @staticmethod
     def _parse_lambda_body(node: ast.AST, args: [arg], new_table: Table, implicit_aliases: dict[str, str] = None) -> Expression:
