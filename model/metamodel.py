@@ -680,3 +680,7 @@ class ExecutionVisitor(ABC):
     @abstractmethod
     def visit_bitwise_or_binary_operator[P, T](self, self1, parameter: P) -> T:
         raise NotImplementedError()
+
+    @abstractmethod
+    def visit_over_function[P, T](self, val: OverFunction, parameter: P) -> T:
+        raise NotImplementedError()

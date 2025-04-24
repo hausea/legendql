@@ -13,6 +13,7 @@ from model.metamodel import ExecutionVisitor, JoinClause, LimitClause, DistinctC
     OrderByExpression, IfExpression, ColumnReferenceExpression, DateLiteral, GroupByExpression, \
     ComputedColumnAliasExpression, VariableAliasExpression, MapReduceExpression, LambdaExpression, AverageFunction, \
     AscendingOrderType, DescendingOrderType, OrderByClause, ModuloFunction, ExponentFunction
+from model.functions import OverFunction
 
 
 @dataclass
@@ -213,3 +214,6 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
 
     def visit_bitwise_or_binary_operator(self, self1, parameter: str) -> str:
         raise NotImplementedError()
+        
+    def visit_over_function(self, val: OverFunction, parameter: str) -> str:
+        return "->window({" + parameter + "})"
