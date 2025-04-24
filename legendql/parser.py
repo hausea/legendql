@@ -163,8 +163,14 @@ class Parser:
         if isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name):
             new_table.columns[node.target.id] = None
             return (ComputedColumnAliasExpression(node.target.id, LambdaExpression(list(map(lambda a: a.arg, args)), Parser._parse_lambda_body(node.value, args, new_table, implicit_aliases))), {node.target.id: args[0].arg})
+        
+        # Handle dictionary syntax: {"column_name": expression}
+        elif isinstance(node, ast.Dict) and len(node.keys) == 1 and isinstance(node.keys[0], ast.Constant):
+            column_name = node.keys[0].value
+            new_table.columns[column_name] = None
+            return (ComputedColumnAliasExpression(column_name, LambdaExpression(list(map(lambda a: a.arg, args)), Parser._parse_lambda_body(node.values[0], args, new_table, implicit_aliases))), {column_name: args[0].arg})
 
-        raise ValueError(f"Not a valid extend statement {node.value}")
+        raise ValueError(f"Not a valid extend statement: {ast.dump(node)}")
 
     @staticmethod
     def _parse_join(node: ast.AST, args: [arg], new_table: Table) -> List[ColumnReferenceExpression]:
@@ -197,8 +203,31 @@ class Parser:
             having = Parser._parse_lambda_body(node.args[2], args, group_by_table, implicit_aliases) if len(node.args) == 3 else None
             new_table.columns = group_by_table.columns
             return GroupByExpression(selections, expressions, having)
+        
+        # Handle dictionary syntax: {"column1": expr1, "column2": expr2, ...}
+        elif isinstance(node, ast.Dict):
+            group_by_table = Table(new_table.table, {})
+            selections = []
+            expressions = []
+            
+            for i in range(len(node.keys)):
+                key = node.keys[i]
+                value = node.values[i]
+                
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    column_name = key.value
+                    group_by_table.columns[column_name] = None
+                    
+                    if isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name) and value.value.id == args[0].arg:
+                        selections.append(ColumnReferenceExpression(value.attr))
+                    else:
+                        expr = Parser._parse_lambda_body(value, args, new_table, {})
+                        expressions.append(ComputedColumnAliasExpression(column_name, expr))
+            
+            new_table.columns = group_by_table.columns
+            return GroupByExpression(selections, expressions, None)
 
-        raise ValueError(f"Unsupported GroupBy expression {node}")
+        raise ValueError(f"Unsupported GroupBy expression {ast.dump(node)}")
 
     @staticmethod
     def _parse_group_by_map_aggregate(node: ast.AST, args: [arg], full_table: Table, target_table: Table) -> Tuple[Expression, dict[str, str]]:
@@ -357,6 +386,8 @@ class Parser:
             from model.metamodel import LiteralExpression
             if isinstance(node.value, int):
                 return LiteralExpression(IntegerLiteral(node.value))
+            if isinstance(node.value, float):
+                return LiteralExpression(IntegerLiteral(int(node.value)))  # Convert float to int for now
             if isinstance(node.value, bool):
                 return LiteralExpression(BooleanLiteral(node.value))
             if isinstance(node.value, str):
@@ -435,7 +466,15 @@ class Parser:
             else:
                 ValueError(f"Unsupported function type: {node.func}")
 
-            if node.func.id == "date":
+            func_name = None
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+            elif isinstance(node.func, ast.Attribute):
+                func_name = node.func.attr
+            else:
+                raise ValueError(f"Unsupported function type: {node.func}")
+                
+            if func_name == "date":
                 from model.metamodel import LiteralExpression
                 from datetime import date
                 # random use of date to prevent auto-format refactorings deleting the import
@@ -444,12 +483,9 @@ class Parser:
                 val = eval(compiled, None, None)
                 return LiteralExpression(literal=DateLiteral(val))
 
-            #if node.func.id not in known_functions:
-            #    ValueError(f"Unknown function name: {node.func.id}")
-
             # very brittle, lots more checks needed here
             module = importlib.import_module("model.functions")
-            class_ = getattr(module, f"{node.func.id.title()}Function")
+            class_ = getattr(module, f"{func_name.title()}Function")
             instance = class_()
             return FunctionExpression(instance, parameters=args_list)
 

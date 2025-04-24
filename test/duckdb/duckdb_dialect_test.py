@@ -230,3 +230,64 @@ class TestDuckDBDialect(unittest.TestCase):
         # All returned employees should have salary > 70000
         for row in rows:
             self.assertTrue(row[3] > 70000)
+            
+    def test_extend_before_filter(self):
+        """Test that EXTEND is processed before FILTER in nested queries."""
+        runtime = DuckDBRuntime(self.duckdb.db.get_db_path())
+        
+        query = (LegendQL.from_table(self.database, self.employees_table)
+                .extend(lambda e: [{"bonus": e.salary * 0.1}])
+                .filter(lambda e: e.bonus > 7500))
+        
+        data_frame = query.bind(runtime)
+        sql = data_frame.executable_to_string()
+        
+        self.assertTrue("WITH" in sql)
+        self.assertTrue("bonus" in sql)
+        
+        result = data_frame.eval()
+        rows = result.data()
+        
+        for row in rows:
+            self.assertTrue(row[4] > 75000)
+            
+    def test_group_by_before_extend(self):
+        """Test that GROUP BY is processed before EXTEND in nested queries."""
+        runtime = DuckDBRuntime(self.duckdb.db.get_db_path())
+        
+        query = (LegendQL.from_table(self.database, self.employees_table)
+                .group_by(lambda e: {"departmentId": e.departmentId, "avg_salary": e.salary.avg()})
+                .extend(lambda e: [{"high_salary": e.avg_salary > 80000}]))
+        
+        data_frame = query.bind(runtime)
+        sql = data_frame.executable_to_string()
+        
+        self.assertTrue("WITH" in sql)
+        self.assertTrue("GROUP BY" in sql)
+        self.assertTrue("avg_salary" in sql)
+        self.assertTrue("high_salary" in sql)
+        
+        result = data_frame.eval()
+        self.assertIsNotNone(result)
+        
+    def test_complex_nested_query(self):
+        """Test a complex query with multiple nested operations."""
+        runtime = DuckDBRuntime(self.duckdb.db.get_db_path())
+        
+        query = (LegendQL.from_table(self.database, self.employees_table)
+                .extend(lambda e: [{"bonus": e.salary * 0.1}])
+                .filter(lambda e: e.bonus > 6500)
+                .group_by(lambda e: {"departmentId": e.departmentId, "avg_bonus": e.bonus.avg()})
+                .extend(lambda e: [{"high_bonus": e.avg_bonus > 8000}])
+                .filter(lambda e: e.high_bonus == True))
+        
+        data_frame = query.bind(runtime)
+        sql = data_frame.executable_to_string()
+        
+        self.assertTrue("WITH" in sql)
+        self.assertTrue("bonus" in sql)
+        self.assertTrue("avg_bonus" in sql)
+        self.assertTrue("high_bonus" in sql)
+        
+        cte_count = sql.count("AS (")
+        self.assertTrue(cte_count >= 4)

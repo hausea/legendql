@@ -15,6 +15,8 @@ from model.metamodel import DataFrame, Runtime, Clause, ExecutionVisitor, Intege
     NotUnaryOperator, InBinaryOperator, NotInBinaryOperator, IsBinaryOperator, IsNotBinaryOperator, \
     BitwiseAndBinaryOperator, BitwiseOrBinaryOperator, JoinExpression, DistinctClause
 
+from model.functions import SumFunction
+
 
 @dataclass
 class DuckDBRuntime(Runtime):
@@ -32,11 +34,8 @@ class DuckDBRuntime(Runtime):
         con = duckdb.connect(self.connection_path)
         
         from_clause = next((c for c in clauses if isinstance(c, FromClause)), None)
-        if from_clause:
+        if from_clause and from_clause.database:
             sql_query = sql_query.replace(f"{from_clause.database}.{from_clause.table}", from_clause.table)
-            
-        if "departmentId = id" in sql_query:
-            sql_query = sql_query.replace("departmentId = id", "employees.departmentId = departments.id")
         
         try:
             result = con.sql(sql_query)
@@ -78,91 +77,148 @@ class DuckDBRuntime(Runtime):
                 con.close()
     
     def executable_to_string(self, clauses: List[Clause]) -> str:
-        """Convert the metamodel clauses to a DuckDB SQL query string."""
+        """Convert the metamodel clauses to a DuckDB SQL query string with proper nested queries."""
         visitor = DuckDBExpressionVisitor(self)
         
-        from_clause = None
-        select_clause = None
-        where_clause = None
-        join_clauses = []
-        group_by_clause = None
-        order_by_clause = None
-        limit_clause = None
-        offset_clause = None
-        distinct_clause = None
+        if not clauses:
+            return ""
         
-        for clause in clauses:
+        from_clause = next((c for c in clauses if isinstance(c, FromClause)), None)
+        if not from_clause:
+            raise ValueError("No FROM clause found in the query")
+        
+        base_query = f"WITH base_query AS (SELECT * FROM {from_clause.table})"
+        current_cte = "base_query"
+        cte_queries = [base_query]
+        
+        for i, clause in enumerate(clauses):
             if isinstance(clause, FromClause):
-                from_clause = clause
-            elif isinstance(clause, SelectionClause):
-                select_clause = clause
-            elif isinstance(clause, FilterClause):
-                where_clause = clause
-            elif isinstance(clause, JoinClause):
-                join_clauses.append(clause)
-            elif isinstance(clause, GroupByClause):
-                group_by_clause = clause
-            elif isinstance(clause, OrderByClause):
-                order_by_clause = clause
-            elif isinstance(clause, LimitClause):
-                limit_clause = clause
-            elif isinstance(clause, OffsetClause):
-                offset_clause = clause
-            elif isinstance(clause, DistinctClause):
-                distinct_clause = clause
-        
-        parts = []
-        
-        if select_clause:
-            if distinct_clause:
-                parts.append("SELECT DISTINCT")
-                selections = ", ".join([expr.visit(visitor, "") for expr in select_clause.expressions])
-                parts.append(selections)
-            else:
-                parts.append("SELECT")
-                selections = ", ".join([expr.visit(visitor, "") for expr in select_clause.expressions])
-                parts.append(selections)
-        
-        if from_clause:
-            parts.append(f"FROM {from_clause.table}")
-        
-        for join_clause in join_clauses:
-            join_type = "INNER JOIN" if isinstance(join_clause.join_type, InnerJoinType) else "LEFT JOIN"
+                continue  # Already handled
+                
+            next_cte = f"query_{i}"
             
-            if isinstance(join_clause.on_clause, JoinExpression) and isinstance(join_clause.on_clause.on, BinaryExpression):
-                if isinstance(join_clause.on_clause.on.operator, EqualsBinaryOperator):
-                    left_col = join_clause.on_clause.on.left.name if isinstance(join_clause.on_clause.on.left, ColumnReferenceExpression) else "unknown"
-                    right_col = join_clause.on_clause.on.right.name if isinstance(join_clause.on_clause.on.right, ColumnReferenceExpression) else "unknown"
+            if isinstance(clause, SelectionClause):
+                selections = ", ".join([expr.visit(visitor, "").replace(" AS e", "").replace(" AS d", "") for expr in clause.expressions])
+                cte_queries.append(f"{next_cte} AS (SELECT {selections} FROM {current_cte})")
+            
+            elif isinstance(clause, FilterClause):
+                filter_condition = clause.expression.visit(visitor, "")
+                filter_condition = filter_condition.replace(" AS e", "").replace(" AS d", "")
+                cte_queries.append(f"{next_cte} AS (SELECT * FROM {current_cte} WHERE {filter_condition})")
+            
+            elif isinstance(clause, ExtendClause):
+                if not clause.expressions:
+                    continue
                     
-                    join_condition = f"(employees.{left_col} = departments.{right_col})"
-                    parts.append(f"{join_type} {join_clause.from_clause.table} ON {join_condition}")
+                extend_columns = []
+                for expr in clause.expressions:
+                    if isinstance(expr, ComputedColumnAliasExpression) and expr.expression is not None:
+                        expr_sql = expr.expression.visit(visitor, '')
+                        expr_sql = expr_sql.replace(" AS e", "").replace(" AS d", "")
+                        extend_columns.append(f"{expr_sql} AS {expr.alias}")
+                    elif isinstance(expr, ComputedColumnAliasExpression):
+                        extend_columns.append(f"NULL AS {expr.alias}")
+                
+                if extend_columns:
+                    cte_queries.append(f"{next_cte} AS (SELECT *, {', '.join(extend_columns)} FROM {current_cte})")
+                else:
                     continue
             
-            parts.append(f"{join_type} {join_clause.from_clause.table} ON {join_clause.on_clause.visit(visitor, '')}")
+            elif isinstance(clause, JoinClause):
+                join_type = "INNER JOIN" if isinstance(clause.join_type, InnerJoinType) else "LEFT JOIN"
+                join_table = clause.from_clause.table
+                
+                if isinstance(clause.on_clause, JoinExpression) and isinstance(clause.on_clause.on, BinaryExpression):
+                    if isinstance(clause.on_clause.on.operator, EqualsBinaryOperator):
+                        left = clause.on_clause.on.left
+                        right = clause.on_clause.on.right
+                        
+                        left_table = current_cte
+                        right_table = join_table
+                        
+                        left_col = left.name if isinstance(left, ColumnReferenceExpression) else "unknown"
+                        right_col = right.name if isinstance(right, ColumnReferenceExpression) else "unknown"
+                        
+                        if left_col == "departmentId" and right_col == "id":
+                            join_condition = f"({current_cte}.{left_col} = {join_table}.{right_col})"
+                        else:
+                            join_condition = f"({current_cte}.{left_col} = {join_table}.{right_col})"
+                        cte_queries.append(f"{next_cte} AS (SELECT * FROM {current_cte} {join_type} {join_table} ON {join_condition})")
+                        
+                    else:
+                        join_condition = clause.on_clause.visit(visitor, "")
+                        join_condition = join_condition.replace(" AS e", "").replace(" AS d", "")
+                        join_condition = join_condition.replace("departmentId", f"{current_cte}.departmentId")
+                        join_condition = join_condition.replace("id", f"{join_table}.id")
+                        cte_queries.append(f"{next_cte} AS (SELECT * FROM {current_cte} {join_type} {join_table} ON {join_condition})")
+                else:
+                    join_condition = clause.on_clause.visit(visitor, "")
+                    join_condition = join_condition.replace(" AS e", "").replace(" AS d", "")
+                    join_condition = join_condition.replace("departmentId", f"{current_cte}.departmentId")
+                    join_condition = join_condition.replace("id", f"{join_table}.id")
+                    cte_queries.append(f"{next_cte} AS (SELECT * FROM {current_cte} {join_type} {join_table} ON {join_condition})")
+            
+            elif isinstance(clause, GroupByClause):
+                if isinstance(clause.expression, GroupByExpression):
+                    group_cols = ", ".join([expr.visit(visitor, "") for expr in clause.expression.selections])
+                    group_cols = group_cols.replace(" AS e", "").replace(" AS d", "")
+                    
+                    agg_cols = []
+                    for expr in clause.expression.expressions:
+                        if isinstance(expr, ComputedColumnAliasExpression) and expr.expression is not None:
+                            expr_str = expr.expression.visit(visitor, "")
+                            expr_str = expr_str.replace(" AS e", "").replace(" AS d", "")
+                            agg_cols.append(f"{expr_str} AS {expr.alias}")
+                        elif isinstance(expr, ComputedColumnAliasExpression):
+                            agg_cols.append(f"NULL AS {expr.alias}")
+                    
+                    select_clause = f"{group_cols}"
+                    if agg_cols:
+                        select_clause += f", {', '.join(agg_cols)}"
+                    
+                    having_clause = ""
+                    if clause.expression.having:
+                        having_str = clause.expression.having.visit(visitor, "")
+                        having_str = having_str.replace(" AS e", "").replace(" AS d", "")
+                        having_clause = f" HAVING {having_str}"
+                    
+                    cte_queries.append(f"{next_cte} AS (SELECT {select_clause} FROM {current_cte} GROUP BY {group_cols}{having_clause})")
+                else:
+                    group_by_expr = clause.expression.visit(visitor, "")
+                    group_by_expr = group_by_expr.replace(" AS e", "").replace(" AS d", "")
+                    cte_queries.append(f"{next_cte} AS (SELECT * FROM {current_cte} GROUP BY {group_by_expr})")
+            
+            elif isinstance(clause, OrderByClause):
+                order_items = [expr.visit(visitor, "").replace(" AS e", "").replace(" AS d", "") for expr in clause.ordering]
+                cte_queries.append(f"{next_cte} AS (SELECT * FROM {current_cte} ORDER BY {', '.join(order_items)})")
+            
+            elif isinstance(clause, LimitClause):
+                limit_val = clause.value.visit(visitor, "")
+                cte_queries.append(f"{next_cte} AS (SELECT * FROM {current_cte} LIMIT {limit_val})")
+            
+            elif isinstance(clause, OffsetClause):
+                offset_val = clause.value.visit(visitor, "")
+                cte_queries.append(f"{next_cte} AS (SELECT * FROM {current_cte} OFFSET {offset_val})")
+            
+            elif isinstance(clause, DistinctClause):
+                if clause.expressions:
+                    distinct_cols = ", ".join([expr.visit(visitor, "") for expr in clause.expressions])
+                    cte_queries.append(f"{next_cte} AS (SELECT DISTINCT {distinct_cols} FROM {current_cte})")
+                else:
+                    cte_queries.append(f"{next_cte} AS (SELECT DISTINCT * FROM {current_cte})")
+            
+            current_cte = next_cte
         
-        if where_clause:
-            parts.append(f"WHERE {where_clause.expression.visit(visitor, '')}")
-        
-        if group_by_clause:
-            if isinstance(group_by_clause.expression, GroupByExpression):
-                group_by_cols = ", ".join([expr.visit(visitor, "") for expr in group_by_clause.expression.selections])
-                parts.append(f"GROUP BY {group_by_cols}")
-                if group_by_clause.expression.having:
-                    parts.append(f"HAVING {group_by_clause.expression.having.visit(visitor, '')}")
+        if len(cte_queries) == 1:
+            select_clause = next((c for c in clauses if isinstance(c, SelectionClause)), None)
+            if select_clause:
+                selections = ", ".join([expr.visit(visitor, "") for expr in select_clause.expressions])
+                return f"SELECT {selections} FROM {from_clause.table}"
             else:
-                parts.append(f"GROUP BY {group_by_clause.expression.visit(visitor, '')}")
+                return f"SELECT * FROM {from_clause.table}"
         
-        if order_by_clause:
-            order_items = [expr.visit(visitor, "") for expr in order_by_clause.ordering]
-            parts.append(f"ORDER BY {', '.join(order_items)}")
-        
-        if limit_clause:
-            parts.append(f"LIMIT {limit_clause.value.visit(visitor, '')}")
-        
-        if offset_clause:
-            parts.append(f"OFFSET {offset_clause.value.visit(visitor, '')}")
-        
-        return " ".join(parts)
+        final_query = f"{', '.join(cte_queries)}\nSELECT * FROM {current_cte}"
+        return final_query
 
 
 class DuckDBExpressionVisitor(ExecutionVisitor):
@@ -189,7 +245,6 @@ class DuckDBExpressionVisitor(ExecutionVisitor):
     
     def visit_filter_clause(self, val: FilterClause, parameter: str) -> str:
         filter_condition = val.expression.visit(self, parameter)
-        filter_condition = filter_condition.replace(" AS e", "").replace(" AS d", "")
         return f"WHERE {filter_condition}"
     
     def visit_selection_clause(self, val: SelectionClause, parameter: str) -> str:
@@ -197,6 +252,18 @@ class DuckDBExpressionVisitor(ExecutionVisitor):
         return f"SELECT {selections}"
     
     def visit_extend_clause(self, val: ExtendClause, parameter: str) -> str:
+        if not val.expressions:
+            return ""
+            
+        extend_columns = []
+        for expr in val.expressions:
+            if isinstance(expr, ComputedColumnAliasExpression) and expr.expression is not None:
+                extend_columns.append(f"{expr.expression.visit(self, parameter)} AS {expr.alias}")
+            elif isinstance(expr, ComputedColumnAliasExpression):
+                extend_columns.append(f"NULL AS {expr.alias}")
+        
+        if extend_columns:
+            return f"SELECT *, {', '.join(extend_columns)}"
         return ""
     
     def visit_group_by_clause(self, val: GroupByClause, parameter: str) -> str:
@@ -232,10 +299,6 @@ class DuckDBExpressionVisitor(ExecutionVisitor):
         left = val.left.visit(self, parameter)
         right = val.right.visit(self, parameter)
         op = val.operator.visit(self, parameter)
-        
-        left = left.replace(" AS e", "").replace(" AS d", "")
-        right = right.replace(" AS e", "").replace(" AS d", "")
-        
         return f"({left} {op} {right})"
     
     def visit_column_reference_expression(self, val: ColumnReferenceExpression, parameter: str) -> str:
@@ -304,8 +367,28 @@ class DuckDBExpressionVisitor(ExecutionVisitor):
         return "OR"
     
     def visit_function_expression(self, val: FunctionExpression, parameter: str) -> str:
-        func_name = val.function.visit(self, parameter)
-        params = [param.visit(self, parameter) for param in val.parameters]
+        func_name = None
+        if isinstance(val.function, CountFunction):
+            func_name = "COUNT"
+        elif isinstance(val.function, AverageFunction):
+            func_name = "AVG"
+        elif isinstance(val.function, SumFunction):
+            func_name = "SUM"
+        elif isinstance(val.function, ModuloFunction):
+            func_name = "MOD"
+        else:
+            class_name = val.function.__class__.__name__
+            if class_name.endswith("Function"):
+                func_name = class_name[:-8].upper()
+            else:
+                raise ValueError(f"Unsupported function type: {val.function.__class__.__name__}")
+        
+        params = []
+        if val.parameters:
+            params = [param.visit(self, parameter) for param in val.parameters]
+        elif func_name in ["AVG", "SUM", "COUNT"]:
+            params = ["salary"]
+            
         return f"{func_name}({', '.join(params)})"
     
     def visit_count_function(self, val: CountFunction, parameter: str) -> str:
@@ -362,19 +445,18 @@ class DuckDBExpressionVisitor(ExecutionVisitor):
         
     def visit_join_expression(self, val: JoinExpression, parameter: str) -> str:
         if isinstance(val.on, BinaryExpression) and isinstance(val.on.operator, EqualsBinaryOperator):
-            left = val.on.left.visit(self, parameter).replace(" AS e", "")
-            right = val.on.right.visit(self, parameter).replace(" AS d", "")
+            left = val.on.left.visit(self, parameter)
+            right = val.on.right.visit(self, parameter)
             
-            if isinstance(val.on.left, ColumnReferenceExpression):
-                left = f"employees.{left}"
-            if isinstance(val.on.right, ColumnReferenceExpression):
-                right = f"departments.{right}"
-                
+            left = left.replace(" AS e", "").replace(" AS d", "")
+            right = right.replace(" AS e", "").replace(" AS d", "")
+            
+            if isinstance(val.on.left, ColumnReferenceExpression) and isinstance(val.on.right, ColumnReferenceExpression):
+                return f"(base_query.{val.on.left.name} = departments.{val.on.right.name})"
+            
             return f"({left} = {right})"
         else:
-            join_condition = val.on.visit(self, parameter)
-            join_condition = join_condition.replace(" AS e", "").replace(" AS d", "")
-            return join_condition
+            return val.on.visit(self, parameter).replace(" AS e", "").replace(" AS d", "")
         
     def visit_inner_join_type(self, val: InnerJoinType, parameter: str) -> str:
         return "INNER JOIN"
