@@ -4,26 +4,92 @@ Example usage of Pandas API with LegendQL.
 This example demonstrates how standard Pandas operations are parsed into LegendQL metamodel.
 """
 import pandas as pd
-from legendql.pandas_legend import init, from_df, bind, cleanup
+from typing import Dict, List, Any, Optional, Type
+from legendql.pandas_legend import init, from_df, create_df, table, bind, cleanup
 from dialect.purerelation.dialect import NonExecutablePureRuntime
 
 init()
 
-employees_df = pd.DataFrame({
+print("=== Creating DataFrames with existing Pandas DataFrames ===")
+employees_data = pd.DataFrame({
     'id': [1, 2, 3, 4, 5],
     'name': ['John', 'Jane', 'Bob', 'Alice', 'Charlie'],
     'department_id': [101, 102, 101, 103, 102],
     'salary': [50000, 60000, 55000, 65000, 70000]
 })
 
-departments_df = pd.DataFrame({
+departments_data = pd.DataFrame({
     'id': [101, 102, 103],
     'name': ['Engineering', 'Marketing', 'Sales'],
     'location': ['New York', 'San Francisco', 'Chicago']
 })
 
-employees_df = from_df(employees_df, "employees", "company")
-departments_df = from_df(departments_df, "departments", "company")
+employees_df = from_df(employees_data, "employees", "company")
+departments_df = from_df(departments_data, "departments", "company")
+
+print("\n=== Creating DataFrames directly with LegendQL context ===")
+employees_df2 = create_df({
+    'id': [1, 2, 3, 4, 5],
+    'name': ['John', 'Jane', 'Bob', 'Alice', 'Charlie'],
+    'department_id': [101, 102, 101, 103, 102],
+    'salary': [50000, 60000, 55000, 65000, 70000]
+}, "employees", "company")
+
+departments_df2 = create_df({
+    'id': [101, 102, 103],
+    'name': ['Engineering', 'Marketing', 'Sales'],
+    'location': ['New York', 'San Francisco', 'Chicago']
+}, "departments", "company")
+
+print("\n=== Creating DataFrames from list of dictionaries ===")
+employees_df3 = create_df([
+    {'id': 1, 'name': 'John', 'department_id': 101, 'salary': 50000},
+    {'id': 2, 'name': 'Jane', 'department_id': 102, 'salary': 60000},
+    {'id': 3, 'name': 'Bob', 'department_id': 101, 'salary': 55000},
+    {'id': 4, 'name': 'Alice', 'department_id': 103, 'salary': 65000},
+    {'id': 5, 'name': 'Charlie', 'department_id': 102, 'salary': 70000}
+], "employees", "company")
+
+print("\n=== Creating DataFrames with just table name and columns ===")
+employee_columns: Dict[str, Type] = {
+    'id': int,
+    'name': str,
+    'department_id': int,
+    'salary': float
+}
+
+department_columns: Dict[str, Type] = {
+    'id': int,
+    'name': str,
+    'location': str
+}
+
+employees_df4 = table("employees", employee_columns, "company")
+departments_df4 = table("departments", department_columns, "company")
+
+print("\nExample: Operations on a table created with just table name and columns")
+employees_data = {
+    'id': [1, 2, 3],
+    'name': ['John', 'Jane', 'Bob'],
+    'department_id': [101, 102, 101],
+    'salary': [50000.0, 60000.0, 55000.0]
+}
+for col, values in employees_data.items():
+    employees_df4[col] = values
+
+result_table = (employees_df4
+               .filter(items=['id', 'name', 'salary'], axis=1)
+               .rename(columns={'salary': 'annual_salary'})
+               .sort_values('annual_salary', ascending=False)
+               .head(2))
+
+runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
+pure_relation_table = bind(result_table, runtime).executable_to_string()
+print(pure_relation_table)
+print()
+
+print("\n=== Operations on DataFrames created with from_df ===")
+runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
 
 runtime = NonExecutablePureRuntime("local::DuckDuckRuntime")
 

@@ -1,8 +1,9 @@
 import unittest
 import pandas as pd
+from typing import Dict, Type
 
 from model.schema import Table, Database
-from legendql.pandas_legend import init, cleanup, from_df, bind, eval
+from legendql.pandas_legend import init, cleanup, from_df, create_df, table, bind, eval
 from dialect.purerelation.dialect import NonExecutablePureRuntime
 
 class TestPandasAPIIntegration(unittest.TestCase):
@@ -217,6 +218,101 @@ class TestPandasAPIIntegration(unittest.TestCase):
         self.assertIn("join", pure_relation)
         self.assertIn("company.departments", pure_relation)
         self.assertIn("JoinKind.INNER", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+
+
+    def test_create_df_dict_of_lists(self):
+        """Test creating a DataFrame from a dictionary of lists"""
+        data = {
+            'id': [1, 2, 3],
+            'name': ['Alice', 'Bob', 'Charlie'],
+            'salary': [50000, 60000, 70000]
+        }
+        df = create_df(data, "employees", "company")
+        
+        self.assertEqual(len(df), 3)
+        self.assertListEqual(list(df.columns), ['id', 'name', 'salary'])
+        
+        pure_relation = bind(df, self.runtime).executable_to_string()
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+        
+        result = df.filter(items=['id', 'name'], axis=1)
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("select", pure_relation)
+        self.assertIn("id", pure_relation)
+        self.assertIn("name", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+
+    def test_create_df_list_of_dicts(self):
+        """Test creating a DataFrame from a list of dictionaries"""
+        data = [
+            {'id': 1, 'name': 'Alice', 'salary': 50000},
+            {'id': 2, 'name': 'Bob', 'salary': 60000},
+            {'id': 3, 'name': 'Charlie', 'salary': 70000}
+        ]
+        df = create_df(data, "employees", "company")
+        
+        self.assertEqual(len(df), 3)
+        self.assertListEqual(sorted(list(df.columns)), sorted(['id', 'name', 'salary']))
+        
+        pure_relation = bind(df, self.runtime).executable_to_string()
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_table_creation(self):
+        """Test creating a DataFrame with just table name and columns"""
+        columns = {
+            'id': int,
+            'name': str,
+            'salary': float
+        }
+        df = table("employees", columns, "company")
+        
+        self.assertEqual(len(df), 0)  # Empty DataFrame
+        self.assertListEqual(sorted(list(df.columns)), sorted(['id', 'name', 'salary']))
+        
+        pure_relation = bind(df, self.runtime).executable_to_string()
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_table_with_operations(self):
+        """Test operations on a DataFrame created with table function"""
+        columns = {
+            'id': int,
+            'name': str,
+            'department_id': int,
+            'salary': float
+        }
+        df = table("employees", columns, "company")
+        
+        data = {
+            'id': [1, 2, 3],
+            'name': ['Alice', 'Bob', 'Charlie'],
+            'department_id': [101, 102, 101],
+            'salary': [50000.0, 60000.0, 70000.0]
+        }
+        for col, values in data.items():
+            df[col] = values
+        
+        result = (df
+                 .filter(items=['id', 'name', 'salary'], axis=1)
+                 .rename(columns={'salary': 'annual_salary'})
+                 .sort_values('annual_salary', ascending=False)
+                 .head(2))
+        
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("select", pure_relation)
+        self.assertIn("id", pure_relation)
+        self.assertIn("name", pure_relation)
+        self.assertIn("rename", pure_relation)
+        self.assertIn("annual_salary", pure_relation)
+        self.assertIn("sort", pure_relation)
+        self.assertIn("descending", pure_relation)
+        self.assertIn("limit(2)", pure_relation)
         self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
 
 
