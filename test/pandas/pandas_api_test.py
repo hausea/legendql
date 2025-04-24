@@ -352,6 +352,138 @@ class TestPandasAPIIntegration(unittest.TestCase):
         self.assertIn("salary", pure_relation)
         self.assertIn("groupBy", pure_relation)
         self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_sum_aggregation(self):
+        """Test groupby operation with sum aggregation"""
+        result = self.employees_df.groupby('department_id').sum()
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("->sum()", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_mean_aggregation(self):
+        """Test groupby operation with mean aggregation"""
+        result = self.employees_df.groupby('department_id').mean()
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("->avg()", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_count_aggregation(self):
+        """Test groupby operation with count aggregation"""
+        result = self.employees_df.groupby('department_id').count()
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("->count()", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_min_aggregation(self):
+        """Test groupby operation with min aggregation"""
+        result = self.employees_df.groupby('department_id').min()
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("->min()", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_max_aggregation(self):
+        """Test groupby operation with max aggregation"""
+        result = self.employees_df.groupby('department_id').max()
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("->max()", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_sum_aggregation_method(self):
+        """Test groupby operation with sum method"""
+        result = self.employees_df.groupby('department_id')['salary'].sum()
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("salary", pure_relation)
+        self.assertIn("->sum()", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_mean_aggregation_method(self):
+        """Test groupby operation with mean method"""
+        result = self.employees_df.groupby('department_id')['salary'].mean()
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("salary", pure_relation)
+        self.assertIn("->avg()", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_count_aggregation_method(self):
+        """Test groupby operation with count method"""
+        result = self.employees_df.groupby('department_id')['id'].count()
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("id", pure_relation)
+        self.assertIn("->count()", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_min_aggregation_method(self):
+        """Test groupby operation with min method"""
+        result = self.employees_df.groupby('department_id')['salary'].min()
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("salary", pure_relation)
+        self.assertIn("->min()", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_max_aggregation_method(self):
+        """Test groupby operation with max method"""
+        result = self.employees_df.groupby('department_id')['salary'].max()
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("salary", pure_relation)
+        self.assertIn("->max()", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_with_method_chaining_and_aggregation(self):
+        """Test groupby operation with method chaining and aggregation"""
+        result = (self.employees_df
+                 .filter(items=['id', 'name', 'department_id', 'salary'], axis=1)
+                 .groupby('department_id')['salary']
+                 .mean())
+        
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("select", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("salary", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("->avg()", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
 
 
 if __name__ == '__main__':

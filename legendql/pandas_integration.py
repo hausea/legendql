@@ -13,7 +13,8 @@ from model.schema import Table, Database
 from model.metamodel import (DataFrame as LegendDataFrame, Expression, 
                            FilterClause, SelectionClause, RenameClause, 
                            ExtendClause, GroupByClause, OrderByClause,
-                           LimitClause, JoinClause, ColumnReferenceExpression)
+                           LimitClause, JoinClause, ColumnReferenceExpression,
+                           FunctionExpression, CountFunction, AverageFunction)
 from legendql.query import Query
 
 _original_filter = pd.DataFrame.filter
@@ -24,6 +25,13 @@ _original_sort_values = pd.DataFrame.sort_values
 _original_merge = pd.DataFrame.merge
 _original_head = pd.DataFrame.head
 _original_groupby = pd.DataFrame.groupby
+
+_original_groupby_agg = None
+_original_groupby_sum = None
+_original_groupby_mean = None
+_original_groupby_count = None
+_original_groupby_min = None
+_original_groupby_max = None
 
 _dataframe_contexts = {}
 
@@ -77,8 +85,10 @@ def _get_table(df: pd.DataFrame) -> Table:
     """Get Table object for a DataFrame."""
     return get_context(df)['table']
     
-def _copy_context(source_df: pd.DataFrame, target_df: pd.DataFrame) -> None:
+def _copy_context(source_df: pd.DataFrame, target_df: pd.DataFrame | None) -> None:
     """Copy LegendQL context from one DataFrame to another."""
+    if target_df is None:
+        return
     ctx = get_context(source_df)
     _dataframe_contexts[id(target_df)] = ctx.copy()
 
@@ -414,11 +424,11 @@ def _patch_merge(self, *args, **kwargs):
     _copy_context(self, result)
     return result
 
-def _patch_groupby(self, by=None, axis=0, level=None, as_index=True, sort=True, group_keys=True, **kwargs):
+def _patch_groupby(self, by=None, axis=None, level=None, as_index=True, sort=True, group_keys=True, **kwargs):
     """
     Patched version of DataFrame.groupby that parses into LegendQL metamodel.
     """
-    if by is not None and axis == 0:
+    if by is not None and (axis is None or axis == 0):
         ctx = get_context(self)
         query = ctx['query']
         
@@ -438,20 +448,296 @@ def _patch_groupby(self, by=None, axis=0, level=None, as_index=True, sort=True, 
     
     original_ctx = get_context(self)
     
-    result = _original_groupby(self, by, axis, level, as_index, sort, group_keys, **kwargs)
+    kwargs_copy = kwargs.copy()
+    if 'axis' in kwargs_copy:
+        del kwargs_copy['axis']
+    
+    result = _original_groupby(self, by=by, level=level, as_index=as_index, sort=sort, group_keys=group_keys, **kwargs_copy)
     
     _dataframe_contexts[id(result)] = original_ctx
         
     return result
 
+def _patch_groupby_agg(self, func=None, *args, **kwargs):
+    """
+    Patched version of GroupBy.agg that parses into LegendQL metamodel.
+    """
+    ctx = get_context(self)
+    query = ctx['query']
+    
+    from model.metamodel import FunctionExpression, CountFunction, AverageFunction
+    
+    # Get the original DataFrame columns from the GroupBy object
+    if hasattr(self, '_selected_obj'):
+        df_obj = self._selected_obj
+    else:
+        df_obj = self.obj
+    
+    # Add the aggregation functions to the query
+    if func is not None:
+        if isinstance(func, dict):
+            # For dictionary-based aggregation
+            for col, agg_func in func.items():
+                if isinstance(agg_func, list):
+                    for f in agg_func:
+                        _add_aggregation_function(query, col, f)
+                else:
+                    _add_aggregation_function(query, col, agg_func)
+        elif isinstance(func, str):
+            for col in df_obj.columns:
+                _add_aggregation_function(query, col, func)
+    
+    # Use the original method to perform the actual aggregation
+    original_agg = self.__class__.agg
+    self.__class__.agg = _original_groupby_agg
+    result = self.agg(func, *args, **kwargs)
+    self.__class__.agg = original_agg
+    
+    if result is not None:
+        _copy_context(self, result)
+    return result
+
+def _patch_groupby_sum(self, *args, **kwargs):
+    """
+    Patched version of GroupBy.sum that parses into LegendQL metamodel.
+    """
+    ctx = get_context(self)
+    query = ctx['query']
+    
+    # Check if this is a SeriesGroupBy object
+    if hasattr(self, 'name') and hasattr(self, 'obj'):
+        # This is a SeriesGroupBy object
+        _add_aggregation_function(query, self.name, 'sum')
+    elif hasattr(self, '_selected_obj'):
+        # This is a DataFrameGroupBy object
+        if hasattr(self._selected_obj, 'select_dtypes'):
+            # This is a DataFrame
+            for col in self._selected_obj.select_dtypes(include=['number']).columns:
+                _add_aggregation_function(query, col, 'sum')
+        elif hasattr(self._selected_obj, 'name'):
+            # This is a Series
+            _add_aggregation_function(query, self._selected_obj.name, 'sum')
+    
+    original_sum = getattr(self.__class__, 'sum')
+    setattr(self.__class__, 'sum', _original_groupby_sum)
+    result = self.sum(*args, **kwargs)
+    setattr(self.__class__, 'sum', original_sum)
+    
+    if result is not None:
+        _copy_context(self, result)
+    return result
+
+def _patch_groupby_mean(self, *args, **kwargs):
+    """
+    Patched version of GroupBy.mean that parses into LegendQL metamodel.
+    """
+    ctx = get_context(self)
+    query = ctx['query']
+    
+    # Check if this is a SeriesGroupBy object
+    if hasattr(self, 'name') and hasattr(self, 'obj'):
+        # This is a SeriesGroupBy object
+        _add_aggregation_function(query, self.name, 'mean')
+    elif hasattr(self, '_selected_obj'):
+        # This is a DataFrameGroupBy object
+        if hasattr(self._selected_obj, 'select_dtypes'):
+            # This is a DataFrame
+            for col in self._selected_obj.select_dtypes(include=['number']).columns:
+                _add_aggregation_function(query, col, 'mean')
+        elif hasattr(self._selected_obj, 'name'):
+            # This is a Series
+            _add_aggregation_function(query, self._selected_obj.name, 'mean')
+    
+    original_mean = getattr(self.__class__, 'mean')
+    setattr(self.__class__, 'mean', _original_groupby_mean)
+    result = self.mean(*args, **kwargs)
+    setattr(self.__class__, 'mean', original_mean)
+    
+    if result is not None:
+        _copy_context(self, result)
+    return result
+
+def _patch_groupby_count(self, *args, **kwargs):
+    """
+    Patched version of GroupBy.count that parses into LegendQL metamodel.
+    """
+    ctx = get_context(self)
+    query = ctx['query']
+    
+    # Check if this is a SeriesGroupBy object
+    if hasattr(self, 'name') and hasattr(self, 'obj'):
+        # This is a SeriesGroupBy object
+        _add_aggregation_function(query, self.name, 'count')
+    elif hasattr(self, '_selected_obj'):
+        # This is a DataFrameGroupBy object
+        if hasattr(self._selected_obj, 'columns'):
+            # This is a DataFrame
+            for col in self._selected_obj.columns:
+                _add_aggregation_function(query, col, 'count')
+        elif hasattr(self._selected_obj, 'name'):
+            # This is a Series
+            _add_aggregation_function(query, self._selected_obj.name, 'count')
+    
+    original_count = getattr(self.__class__, 'count')
+    setattr(self.__class__, 'count', _original_groupby_count)
+    result = self.count(*args, **kwargs)
+    setattr(self.__class__, 'count', original_count)
+    
+    if result is not None:
+        _copy_context(self, result)
+    return result
+
+def _patch_groupby_min(self, *args, **kwargs):
+    """
+    Patched version of GroupBy.min that parses into LegendQL metamodel.
+    """
+    ctx = get_context(self)
+    query = ctx['query']
+    
+    # Check if this is a SeriesGroupBy object
+    if hasattr(self, 'name') and hasattr(self, 'obj'):
+        # This is a SeriesGroupBy object
+        _add_aggregation_function(query, self.name, 'min')
+    elif hasattr(self, '_selected_obj'):
+        # This is a DataFrameGroupBy object
+        if hasattr(self._selected_obj, 'columns'):
+            # This is a DataFrame
+            for col in self._selected_obj.columns:
+                _add_aggregation_function(query, col, 'min')
+        elif hasattr(self._selected_obj, 'name'):
+            # This is a Series
+            _add_aggregation_function(query, self._selected_obj.name, 'min')
+    
+    original_min = getattr(self.__class__, 'min')
+    setattr(self.__class__, 'min', _original_groupby_min)
+    result = self.min(*args, **kwargs)
+    setattr(self.__class__, 'min', original_min)
+    
+    if result is not None:
+        _copy_context(self, result)
+    return result
+
+def _patch_groupby_max(self, *args, **kwargs):
+    """
+    Patched version of GroupBy.max that parses into LegendQL metamodel.
+    """
+    ctx = get_context(self)
+    query = ctx['query']
+    
+    # Check if this is a SeriesGroupBy object
+    if hasattr(self, 'name') and hasattr(self, 'obj'):
+        # This is a SeriesGroupBy object
+        _add_aggregation_function(query, self.name, 'max')
+    elif hasattr(self, '_selected_obj'):
+        # This is a DataFrameGroupBy object
+        if hasattr(self._selected_obj, 'columns'):
+            # This is a DataFrame
+            for col in self._selected_obj.columns:
+                _add_aggregation_function(query, col, 'max')
+        elif hasattr(self._selected_obj, 'name'):
+            # This is a Series
+            _add_aggregation_function(query, self._selected_obj.name, 'max')
+    
+    original_max = getattr(self.__class__, 'max')
+    setattr(self.__class__, 'max', _original_groupby_max)
+    result = self.max(*args, **kwargs)
+    setattr(self.__class__, 'max', original_max)
+    
+    if result is not None:
+        _copy_context(self, result)
+    return result
+
+def _add_aggregation_function(query, column, func_name):
+    """
+    Add an aggregation function to the GroupByExpression in the query.
+    
+    Args:
+        query: The Query object
+        column: The column to aggregate
+        func_name: The name of the aggregation function ('sum', 'mean', 'count', etc.)
+    """
+    from model.metamodel import FunctionExpression, CountFunction, AverageFunction
+    from model.metamodel import SumFunction, MinFunction, MaxFunction
+    from model.metamodel import ColumnReferenceExpression, GroupByClause
+    
+    if query is None:
+        return
+    
+    group_by_clause = None
+    for clause in reversed(query._clauses):
+        if isinstance(clause, GroupByClause):
+            group_by_clause = clause
+            break
+    
+    if group_by_clause is None:
+        return
+    
+    # Get the GroupByExpression
+    group_by_expr = group_by_clause.expression
+    
+    if hasattr(column, 'name'):
+        column_name = str(column.name) if column.name is not None else "column"
+    elif isinstance(column, pd.Series):
+        column_name = str(column.name) if column.name is not None else "column"
+    elif hasattr(column, '__str__'):
+        column_name = str(column)
+    else:
+        column_name = str(column) if column is not None else "column"
+    
+    col_expr = ColumnReferenceExpression(name=column_name)
+    
+    if func_name == 'count':
+        function = CountFunction()
+        func_expr = FunctionExpression(function=function, parameters=[col_expr])
+    elif func_name in ['mean', 'avg', 'average']:
+        function = AverageFunction()
+        func_expr = FunctionExpression(function=function, parameters=[col_expr])
+    elif func_name == 'sum':
+        function = SumFunction()
+        func_expr = FunctionExpression(function=function, parameters=[col_expr])
+    elif func_name == 'min':
+        function = MinFunction()
+        func_expr = FunctionExpression(function=function, parameters=[col_expr])
+    elif func_name == 'max':
+        function = MaxFunction()
+        func_expr = FunctionExpression(function=function, parameters=[col_expr])
+    else:
+        function = CountFunction()
+        func_expr = FunctionExpression(function=function, parameters=[col_expr])
+    
+    # Add the function expression to the GroupByExpression
+    if hasattr(group_by_expr, 'expressions'):
+        expressions = getattr(group_by_expr, 'expressions')
+        if isinstance(expressions, list):
+            expressions.append(func_expr)
+
+
+def _patch_groupby_getitem(self, key):
+    """
+    Patched version of GroupBy.__getitem__ that propagates context to SeriesGroupBy objects.
+    """
+    # Use the global original __getitem__ method
+    global _original_groupby_getitem
+    
+    result = _original_groupby_getitem(self, key)
+    
+    # Propagate context to the SeriesGroupBy object
+    ctx = get_context(self)
+    if result is not None and ctx is not None:
+        _dataframe_contexts[id(result)] = ctx.copy()
+    
+    return result
+
 def apply_patches():
     """Apply all the patches to Pandas DataFrame methods."""
-    global _original_loc_getitem
+    global _original_loc_getitem, _original_groupby_agg, _original_groupby_sum
+    global _original_groupby_mean, _original_groupby_count, _original_groupby_min, _original_groupby_max
+    global _original_groupby_getitem
     
     df = pd.DataFrame()
     _original_loc_getitem = df.loc.__getitem__
     
-    pd.DataFrame.filter = _patch_filter
+    setattr(pd.DataFrame, 'filter', _patch_filter)
     
     original_loc_property = pd.DataFrame.loc
     
@@ -460,26 +746,79 @@ def apply_patches():
         original_indexer.__getitem__ = lambda key: _patch_loc_getitem(self, key)
         return original_indexer
     
-    pd.DataFrame.loc = property(patched_loc)
+    setattr(pd.DataFrame, 'loc', property(patched_loc))
+    setattr(pd.DataFrame, 'rename', _patch_rename)
+    setattr(pd.DataFrame, 'assign', _patch_assign)
+    setattr(pd.DataFrame, 'sort_values', _patch_sort_values)
+    setattr(pd.DataFrame, 'head', _patch_head)
+    setattr(pd.DataFrame, 'merge', _patch_merge)
+    setattr(pd.DataFrame, 'groupby', _patch_groupby)
     
-    pd.DataFrame.rename = _patch_rename
-    pd.DataFrame.assign = _patch_assign
-    pd.DataFrame.sort_values = _patch_sort_values
-    pd.DataFrame.head = _patch_head
-    pd.DataFrame.merge = _patch_merge
-    pd.DataFrame.groupby = _patch_groupby
+    # Create a test GroupBy object to get the class
+    test_df = pd.DataFrame({'a': [1, 2], 'b': [3, 4]})
+    test_groupby = test_df.groupby('a')
+    
+    # Get the actual GroupBy class from our test object
+    groupby_class = test_groupby.__class__
+    
+    _original_groupby_agg = test_groupby.agg
+    _original_groupby_sum = test_groupby.sum
+    _original_groupby_mean = test_groupby.mean
+    _original_groupby_count = test_groupby.count
+    _original_groupby_min = test_groupby.min
+    _original_groupby_max = test_groupby.max
+    _original_groupby_getitem = groupby_class.__getitem__
+    
+    setattr(groupby_class, 'agg', _patch_groupby_agg)
+    setattr(groupby_class, 'sum', _patch_groupby_sum)
+    setattr(groupby_class, 'mean', _patch_groupby_mean)
+    setattr(groupby_class, 'count', _patch_groupby_count)
+    setattr(groupby_class, 'min', _patch_groupby_min)
+    setattr(groupby_class, 'max', _patch_groupby_max)
+    setattr(groupby_class, '__getitem__', _patch_groupby_getitem)
+    
+    series_groupby = test_df.groupby('a')['b']
+    series_groupby_class = series_groupby.__class__
+    
+    setattr(series_groupby_class, 'sum', _patch_groupby_sum)
+    setattr(series_groupby_class, 'mean', _patch_groupby_mean)
+    setattr(series_groupby_class, 'count', _patch_groupby_count)
+    setattr(series_groupby_class, 'min', _patch_groupby_min)
+    setattr(series_groupby_class, 'max', _patch_groupby_max)
     
 def remove_patches():
     """Remove all the patches from Pandas DataFrame methods."""
-    pd.DataFrame.filter = _original_filter
+    global _original_groupby_getitem
+    
+    setattr(pd.DataFrame, 'filter', _original_filter)
     
     original_loc_property = getattr(pd.DataFrame, 'loc', None)
     if original_loc_property is not None:
-        pd.DataFrame.loc = original_loc_property
+        setattr(pd.DataFrame, 'loc', original_loc_property)
     
-    pd.DataFrame.rename = _original_rename
-    pd.DataFrame.assign = _original_assign
-    pd.DataFrame.sort_values = _original_sort_values
-    pd.DataFrame.head = _original_head
-    pd.DataFrame.merge = _original_merge
-    pd.DataFrame.groupby = _original_groupby
+    setattr(pd.DataFrame, 'rename', _original_rename)
+    setattr(pd.DataFrame, 'assign', _original_assign)
+    setattr(pd.DataFrame, 'sort_values', _original_sort_values)
+    setattr(pd.DataFrame, 'head', _original_head)
+    setattr(pd.DataFrame, 'merge', _original_merge)
+    setattr(pd.DataFrame, 'groupby', _original_groupby)
+    
+    # Create a test groupby to get the class
+    test_df = pd.DataFrame({'a': [1, 2], 'b': [3, 4]})
+    test_groupby = test_df.groupby('a')
+    groupby_class = test_groupby.__class__
+    
+    if _original_groupby_agg is not None:
+        setattr(groupby_class, 'agg', _original_groupby_agg)
+    if _original_groupby_sum is not None:
+        setattr(groupby_class, 'sum', _original_groupby_sum)
+    if _original_groupby_mean is not None:
+        setattr(groupby_class, 'mean', _original_groupby_mean)
+    if _original_groupby_count is not None:
+        setattr(groupby_class, 'count', _original_groupby_count)
+    if _original_groupby_min is not None:
+        setattr(groupby_class, 'min', _original_groupby_min)
+    if _original_groupby_max is not None:
+        setattr(groupby_class, 'max', _original_groupby_max)
+    if _original_groupby_getitem is not None:
+        setattr(groupby_class, '__getitem__', _original_groupby_getitem)

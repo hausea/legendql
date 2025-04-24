@@ -166,6 +166,60 @@ pure_relation11 = bind(result11, runtime).executable_to_string()
 print(pure_relation11)
 print()
 
+print("Example 12: Group By with Sum Aggregation")
+result12 = employees_df.groupby('department_id').sum()
+pure_relation12 = bind(result12, runtime).executable_to_string()
+print(pure_relation12)
+print()
+
+print("Example 13: Group By with Mean Aggregation")
+result13 = employees_df.groupby('department_id').mean()
+pure_relation13 = bind(result13, runtime).executable_to_string()
+print(pure_relation13)
+print()
+
+print("Example 14: Group By with Count Aggregation")
+result14 = employees_df.groupby('department_id').count()
+pure_relation14 = bind(result14, runtime).executable_to_string()
+print(pure_relation14)
+print()
+
+print("Example 15: Group By with Min Aggregation")
+result15 = employees_df.groupby('department_id').min()
+pure_relation15 = bind(result15, runtime).executable_to_string()
+print(pure_relation15)
+print()
+
+print("Example 16: Group By with Max Aggregation")
+result16 = employees_df.groupby('department_id').max()
+pure_relation16 = bind(result16, runtime).executable_to_string()
+print(pure_relation16)
+print()
+
+print("Example 17: Group By with Single Column Aggregation")
+result17 = employees_df.groupby('department_id').agg({'salary': 'sum'})
+pure_relation17 = bind(result17, runtime).executable_to_string()
+print(pure_relation17)
+print()
+
+print("Example 18: Group By with Multiple Aggregations")
+result18 = employees_df.groupby('department_id').agg({
+    'salary': ['sum', 'mean', 'min', 'max'],
+    'id': 'count'
+})
+pure_relation18 = bind(result18, runtime).executable_to_string()
+print(pure_relation18)
+print()
+
+print("Example 19: Group By with Method Chaining and Aggregation")
+result19 = (employees_df
+          .filter(items=['id', 'name', 'department_id', 'salary'], axis=1)
+          .groupby('department_id')
+          .agg({'salary': 'mean'}))
+pure_relation19 = bind(result19, runtime).executable_to_string()
+print(pure_relation19)
+print()
+
 cleanup()
 
 print("Example of how this would be used with a real runtime:")

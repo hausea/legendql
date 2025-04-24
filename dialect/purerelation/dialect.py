@@ -12,6 +12,7 @@ from model.metamodel import ExecutionVisitor, JoinClause, LimitClause, DistinctC
     MultiplyBinaryOperator, SubtractBinaryOperator, DivideBinaryOperator, OffsetClause, RenameClause, \
     OrderByExpression, IfExpression, ColumnReferenceExpression, DateLiteral, GroupByExpression, \
     ComputedColumnAliasExpression, VariableAliasExpression, MapReduceExpression, LambdaExpression, AverageFunction, \
+    SumFunction, MinFunction, MaxFunction, \
     AscendingOrderType, DescendingOrderType, OrderByClause, ModuloFunction, ExponentFunction
 
 
@@ -123,6 +124,15 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
 
     def visit_average_function(self, val: AverageFunction, parameter: str) -> str:
         return "->avg()"
+        
+    def visit_sum_function(self, val: SumFunction, parameter: str) -> str:
+        return "->sum()"
+        
+    def visit_min_function(self, val: MinFunction, parameter: str) -> str:
+        return "->min()"
+        
+    def visit_max_function(self, val: MaxFunction, parameter: str) -> str:
+        return "->max()"
 
     def visit_modulo_function[P, T](self, val: ModuloFunction, parameter: P) -> T:
         return f"->mod({parameter})"
