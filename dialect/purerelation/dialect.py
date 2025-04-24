@@ -216,4 +216,4 @@ class PureRelationExpressionVisitor(ExecutionVisitor):
         raise NotImplementedError()
         
     def visit_over_function(self, val: OverFunction, parameter: str) -> str:
-        return "->window({" + parameter + "})"
+        return "over(" + parameter + ")"
