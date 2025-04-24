@@ -77,6 +77,21 @@ class AverageFunction(Function):
         return visitor.visit_average_function(self, parameter)
 
 @dataclass
+class SumFunction(Function):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_sum_function(self, parameter)
+
+@dataclass
+class MinFunction(Function):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_min_function(self, parameter)
+
+@dataclass
+class MaxFunction(Function):
+    def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
+        return visitor.visit_max_function(self, parameter)
+
+@dataclass
 class ModuloFunction(Function):
     def visit[P, T](self, visitor: ExecutionVisitor, parameter: P) -> T:
         return visitor.visit_modulo_function(self, parameter)
