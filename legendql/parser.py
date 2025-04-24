@@ -222,6 +222,9 @@ class Parser:
 
     @staticmethod
     def _parse_order_by(node: ast.AST, args: [arg]) -> [OrderByExpression]:
+        if isinstance(node, ast.Constant) and node.value is None:
+            return None
+            
         if isinstance(node, ast.List):
             return [item for sublist in map(lambda n: Parser._parse_order_by(n, args), node.elts) for item in sublist]
 
@@ -235,7 +238,7 @@ class Parser:
                 order = DescendingOrderType()
 
         if isinstance(clause, ast.Attribute):
-            return [OrderByExpression(order, ColumnReferenceExpression(clause.attr))]
+            return OrderByExpression(order, ColumnAliasExpression(args[0].arg, ColumnReferenceExpression(clause.attr)))
 
         raise ValueError(f"Not a valid sort statement {clause}")
 
@@ -298,19 +301,48 @@ class Parser:
                 
                 frame = None
                 if len(call_args) > 3:
-                    frame = Parser._parse_lambda_body(call_args[3], args, new_table)
+                    if isinstance(call_args[3], ast.Constant) and call_args[3].value is None:
+                        frame = None
+                    else:
+                        frame = Parser._parse_lambda_body(call_args[3], args, new_table)
                 elif any(kw.arg == "frame" for kw in call_keywords):
                     frame_kw = next(kw for kw in call_keywords if kw.arg == "frame")
-                    frame = Parser._parse_lambda_body(frame_kw.value, args, new_table)
+                    if isinstance(frame_kw.value, ast.Constant) and frame_kw.value.value is None:
+                        frame = None
+                    else:
+                        frame = Parser._parse_lambda_body(frame_kw.value, args, new_table)
                 
                 qualify = None
                 if len(call_args) > 4:
-                    qualify = Parser._parse_lambda_body(call_args[4], args, new_table)
+                    if isinstance(call_args[4], ast.Constant) and call_args[4].value is None:
+                        qualify = None
+                    else:
+                        qualify = Parser._parse_lambda_body(call_args[4], args, new_table)
                 elif any(kw.arg == "qualify" for kw in call_keywords):
                     qualify_kw = next(kw for kw in call_keywords if kw.arg == "qualify")
-                    qualify = Parser._parse_lambda_body(qualify_kw.value, args, new_table)
+                    if isinstance(qualify_kw.value, ast.Constant) and qualify_kw.value.value is None:
+                        qualify = None
+                    else:
+                        qualify = Parser._parse_lambda_body(qualify_kw.value, args, new_table)
                 
-                parameters = [p for p in [columns, functions, sort, frame, qualify] if p is not None]
+                parameters = [columns, functions]
+                
+                if sort is not None:
+                    # If sort is an OrderByExpression, convert it to a ColumnAliasExpression
+                    if isinstance(sort, OrderByExpression) and isinstance(sort.expression, ColumnAliasExpression):
+                        parameters.append(sort.expression)
+                    else:
+                        parameters.append(sort)
+                elif frame is not None or qualify is not None:
+                    parameters.append(None)
+                
+                if frame is not None:
+                    parameters.append(frame)
+                elif qualify is not None:
+                    parameters.append(None)
+                
+                if qualify is not None:
+                    parameters.append(qualify)
                 
                 # Create a computed column alias expression with the over function
                 return ComputedColumnAliasExpression(
