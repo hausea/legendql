@@ -146,6 +146,26 @@ pure_relation8 = bind(result8, runtime).executable_to_string()
 print(pure_relation8)
 print()
 
+print("Example 9: Group By Single Column")
+result9 = employees_df.groupby('department_id')
+pure_relation9 = bind(result9, runtime).executable_to_string()
+print(pure_relation9)
+print()
+
+print("Example 10: Group By Multiple Columns")
+result10 = employees_df.groupby(['department_id', 'name'])
+pure_relation10 = bind(result10, runtime).executable_to_string()
+print(pure_relation10)
+print()
+
+print("Example 11: Group By with Method Chaining")
+result11 = (employees_df
+          .filter(items=['id', 'name', 'department_id', 'salary'], axis=1)
+          .groupby('department_id'))
+pure_relation11 = bind(result11, runtime).executable_to_string()
+print(pure_relation11)
+print()
+
 cleanup()
 
 print("Example of how this would be used with a real runtime:")

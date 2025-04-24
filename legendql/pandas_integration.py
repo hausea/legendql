@@ -23,6 +23,7 @@ _original_assign = pd.DataFrame.assign
 _original_sort_values = pd.DataFrame.sort_values
 _original_merge = pd.DataFrame.merge
 _original_head = pd.DataFrame.head
+_original_groupby = pd.DataFrame.groupby
 
 _dataframe_contexts = {}
 
@@ -53,12 +54,17 @@ def init_dataframe(df: pd.DataFrame, table_name: str = "pandas_table",
     
     return df_copy
     
-def get_context(df: pd.DataFrame) -> Dict:
-    """Get LegendQL context for a DataFrame."""
+def get_context(df) -> Dict:
+    """Get LegendQL context for a DataFrame or GroupBy object."""
+    if hasattr(df, '_groupby') and hasattr(df, 'obj'):
+        # For GroupBy objects, get the context from the original DataFrame
+        return get_context(df.obj)
+    
     ctx = _dataframe_contexts.get(id(df))
     if ctx is None:
-        init_dataframe(df)
-        ctx = _dataframe_contexts.get(id(df))
+        if isinstance(df, pd.DataFrame):
+            init_dataframe(df)
+            ctx = _dataframe_contexts.get(id(df))
         if ctx is None:
             return {'query': None, 'table': None, 'database': None}
     return ctx
@@ -408,6 +414,36 @@ def _patch_merge(self, *args, **kwargs):
     _copy_context(self, result)
     return result
 
+def _patch_groupby(self, by=None, axis=0, level=None, as_index=True, sort=True, group_keys=True, **kwargs):
+    """
+    Patched version of DataFrame.groupby that parses into LegendQL metamodel.
+    """
+    if by is not None and axis == 0:
+        ctx = get_context(self)
+        query = ctx['query']
+        
+        from model.metamodel import GroupByClause, GroupByExpression, ColumnReferenceExpression
+        
+        if isinstance(by, str) or not hasattr(by, '__iter__') or isinstance(by, pd.Series):
+            by = [by]
+            
+        selections = []
+        for col in by:
+            if isinstance(col, str):
+                selections.append(ColumnReferenceExpression(name=col))
+        
+        group_by_expr = GroupByExpression(selections=selections, expressions=[])
+        
+        query._add_clause(GroupByClause(expression=group_by_expr))
+    
+    original_ctx = get_context(self)
+    
+    result = _original_groupby(self, by, axis, level, as_index, sort, group_keys, **kwargs)
+    
+    _dataframe_contexts[id(result)] = original_ctx
+        
+    return result
+
 def apply_patches():
     """Apply all the patches to Pandas DataFrame methods."""
     global _original_loc_getitem
@@ -431,6 +467,7 @@ def apply_patches():
     pd.DataFrame.sort_values = _patch_sort_values
     pd.DataFrame.head = _patch_head
     pd.DataFrame.merge = _patch_merge
+    pd.DataFrame.groupby = _patch_groupby
     
 def remove_patches():
     """Remove all the patches from Pandas DataFrame methods."""
@@ -445,3 +482,4 @@ def remove_patches():
     pd.DataFrame.sort_values = _original_sort_values
     pd.DataFrame.head = _original_head
     pd.DataFrame.merge = _original_merge
+    pd.DataFrame.groupby = _original_groupby

@@ -315,6 +315,44 @@ class TestPandasAPIIntegration(unittest.TestCase):
         self.assertIn("limit(2)", pure_relation)
         self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
 
+    def test_groupby_single_column(self):
+        """Test groupby operation with a single column"""
+        result = self.employees_df.groupby('department_id')
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_multiple_columns(self):
+        """Test groupby operation with multiple columns"""
+        result = self.employees_df.groupby(['department_id', 'name'])
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("name", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+    
+    def test_groupby_with_method_chaining(self):
+        """Test groupby operation with method chaining"""
+        result = (self.employees_df
+                 .filter(items=['id', 'name', 'department_id', 'salary'], axis=1)
+                 .groupby('department_id'))
+        
+        pure_relation = bind(result, self.runtime).executable_to_string()
+        
+        self.assertIn("company.employees", pure_relation)
+        self.assertIn("select", pure_relation)
+        self.assertIn("id", pure_relation)
+        self.assertIn("name", pure_relation)
+        self.assertIn("department_id", pure_relation)
+        self.assertIn("salary", pure_relation)
+        self.assertIn("groupBy", pure_relation)
+        self.assertIn("from(local::DuckDuckRuntime)", pure_relation)
+
 
 if __name__ == '__main__':
     unittest.main()
