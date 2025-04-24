@@ -1,17 +1,19 @@
 import os
 import tempfile
 from datetime import datetime, date
+from typing import Any, Union
 
 import duckdb
-from duckdb import DuckDBPyRelation
 
 from model.schema import Table
+
+DuckDBPyRelation = Any
 
 
 class DuckDB:
     database_path: str
 
-    def __init__(self, path: str = None) -> None:
+    def __init__(self, path: str = "") -> None:
         self.database_path = path
 
     def get_db_path(self) -> str:
@@ -39,7 +41,7 @@ class DuckDB:
         columns = []
         for (col, typ) in table.columns.items():
             columns.append(f"{col} {self._to_column_type(typ)}")
-        create = f"CREATE TABLE {table.table} ({", ".join(columns)});"
+        create = f"CREATE TABLE {table.table} ({', '.join(columns)});"
         self.exec_sql(create)
 
     def drop_table(self, table: Table):
@@ -55,11 +57,11 @@ class DuckDB:
         raise TypeError(f"Unkonwn column type {typ}")
 
 class TestDuckDB:
-    database_path: tempfile.NamedTemporaryFile
+    database_path: str
     db: DuckDB
 
     def start(self):
-        file = tempfile.NamedTemporaryFile(mode="w+", delete_on_close=True)
+        file = tempfile.NamedTemporaryFile(mode="w+", delete=True)
         self.database_path = file.name
         file.close()
         self.db = DuckDB(self.database_path)
