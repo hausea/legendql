@@ -37,8 +37,8 @@ class SQLGlotRuntime(Runtime, ABC):
                 if isinstance(clause, SelectionClause):
                     columns = []
                     for expr in clause.expressions:
-                        col_name = expr.visit(visitor, "")
-                        columns.append(exp.Column(this=col_name))
+                        column = expr.visit(visitor, "")
+                        columns.append(column)
                     query = query.select(*columns)
                 elif isinstance(clause, FilterClause):
                     condition = clause.expression.visit(visitor, "")
@@ -70,25 +70,25 @@ class SQLGlotExpressionVisitor(ExecutionVisitor):
         """Visit FROM clause."""
         return val.table
     
-    def visit_column_reference_expression(self, val: ColumnReferenceExpression, parameter: str) -> str:
+    def visit_column_reference_expression(self, val: ColumnReferenceExpression, parameter: str) -> SQLGlotExpression:
         """Visit column reference."""
-        return val.name
+        return exp.Column(this=val.name)
     
-    def visit_integer_literal(self, val: IntegerLiteral, parameter: str) -> int:
+    def visit_integer_literal(self, val: IntegerLiteral, parameter: str) -> SQLGlotExpression:
         """Visit integer literal."""
-        return val.value()
+        return exp.Literal(this=val.value(), is_string=False)
     
-    def visit_string_literal(self, val: StringLiteral, parameter: str) -> str:
+    def visit_string_literal(self, val: StringLiteral, parameter: str) -> SQLGlotExpression:
         """Visit string literal."""
-        return val.value()
+        return exp.Literal(this=val.value(), is_string=True)
     
-    def visit_boolean_literal(self, val: BooleanLiteral, parameter: str) -> bool:
+    def visit_boolean_literal(self, val: BooleanLiteral, parameter: str) -> SQLGlotExpression:
         """Visit boolean literal."""
-        return val.value()
+        return exp.Literal(this=val.value(), is_string=False)
     
-    def visit_date_literal(self, val: DateLiteral, parameter: str) -> str:
+    def visit_date_literal(self, val: DateLiteral, parameter: str) -> SQLGlotExpression:
         """Visit date literal."""
-        return val.val.isoformat()
+        return exp.Literal(this=val.val.isoformat(), is_string=True)
     
     def visit_literal_expression(self, val: LiteralExpression, parameter: str) -> Any:
         """Visit literal expression."""
@@ -141,7 +141,45 @@ class SQLGlotExpressionVisitor(ExecutionVisitor):
         left = val.left.visit(self, parameter)
         right = val.right.visit(self, parameter)
         op = val.operator.visit(self, parameter)
-        return op(left, right)
+        
+        if isinstance(op, exp.GT):
+            return exp.GT(this=left, expression=right)
+        elif isinstance(op, exp.LT):
+            return exp.LT(this=left, expression=right)
+        elif isinstance(op, exp.GTE):
+            return exp.GTE(this=left, expression=right)
+        elif isinstance(op, exp.LTE):
+            return exp.LTE(this=left, expression=right)
+        elif isinstance(op, exp.EQ):
+            return exp.EQ(this=left, expression=right)
+        elif isinstance(op, exp.NEQ):
+            return exp.NEQ(this=left, expression=right)
+        elif isinstance(op, exp.And):
+            return exp.And(this=left, expression=right)
+        elif isinstance(op, exp.Or):
+            return exp.Or(this=left, expression=right)
+        elif isinstance(op, exp.Add):
+            return exp.Add(this=left, expression=right)
+        elif isinstance(op, exp.Sub):
+            return exp.Sub(this=left, expression=right)
+        elif isinstance(op, exp.Mul):
+            return exp.Mul(this=left, expression=right)
+        elif isinstance(op, exp.Div):
+            return exp.Div(this=left, expression=right)
+        elif isinstance(op, exp.In):
+            return exp.In(this=left, expression=right)
+        elif isinstance(op, exp.NotIn):
+            return exp.NotIn(this=left, expression=right)
+        elif isinstance(op, exp.Is):
+            return exp.Is(this=left, expression=right)
+        elif isinstance(op, exp.IsNot):
+            return exp.IsNot(this=left, expression=right)
+        elif isinstance(op, exp.BitwiseAnd):
+            return exp.BitwiseAnd(this=left, expression=right)
+        elif isinstance(op, exp.BitwiseOr):
+            return exp.BitwiseOr(this=left, expression=right)
+        else:
+            raise ValueError(f"Unsupported operator type: {type(op)}")
     
     def visit_unary_expression(self, val, parameter):
         expr = val.expression.visit(self, parameter)

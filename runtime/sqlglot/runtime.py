@@ -15,13 +15,9 @@ class DuckDBSQLGlotDatabaseRuntime(DuckDBSQLGlotRuntime):
     def eval(self, clauses: List[Clause]) -> Any:
         """Execute the query against a DuckDB database."""
         sql = self.executable_to_string(clauses)
-        try:
-            con = duckdb.connect(self.db_path)
-            result = con.sql(sql)
-            return result
-        finally:
-            if 'con' in locals():
-                con.close()
+        self.connection = duckdb.connect(self.db_path)
+        result = self.connection.sql(sql)
+        return result
     
     def create_table(self, table: Table):
         """Create a table in the DuckDB database."""
