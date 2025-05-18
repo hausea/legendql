@@ -25,12 +25,8 @@ class DuckDB:
         pass
 
     def exec_sql(self, sql: str) -> DuckDBPyRelation:
-        try:
-            con = duckdb.connect(self.database_path)
-            return con.sql(sql)
-        finally:
-            if 'con' in locals():
-                con.close()
+        con = duckdb.connect(self.database_path)
+        return con.sql(sql)
 
     def load_csv(self, table: Table , csv_path: str):
         self.exec_sql(f"INSERT INTO {table.table} SELECT * FROM read_csv('{csv_path}');")
@@ -39,7 +35,7 @@ class DuckDB:
         columns = []
         for (col, typ) in table.columns.items():
             columns.append(f"{col} {self._to_column_type(typ)}")
-        create = f"CREATE TABLE {table.table} ({", ".join(columns)});"
+        create = f"CREATE TABLE {table.table} ({', '.join(columns)});"
         self.exec_sql(create)
 
     def drop_table(self, table: Table):
